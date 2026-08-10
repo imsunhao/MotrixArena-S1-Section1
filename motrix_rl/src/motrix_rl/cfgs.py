@@ -387,6 +387,7 @@ class navigation:
     @rlcfg("vbot_locomotion_section011_rough_corridor_goal_velocity")
     @rlcfg("vbot_locomotion_section011_rough_corridor_contact")
     @rlcfg("vbot_locomotion_section011_full_route_contact")
+    @rlcfg("vbot_locomotion_section011_mixed_route_contact")
     @rlcfg("vbot_navigation_section011")
     @rlcfg("vbot_navigation_section01")
     @dataclass

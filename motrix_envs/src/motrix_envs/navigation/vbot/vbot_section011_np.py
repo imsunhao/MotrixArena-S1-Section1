@@ -69,6 +69,7 @@ def generate_repeating_array(num_period, num_reset, period_counter):
 @registry.env("vbot_locomotion_section011_rough_corridor_goal_velocity", "np")
 @registry.env("vbot_locomotion_section011_rough_corridor_contact", "np")
 @registry.env("vbot_locomotion_section011_full_route_contact", "np")
+@registry.env("vbot_locomotion_section011_mixed_route_contact", "np")
 @registry.env("vbot_navigation_section011_go1_transfer_fast_corridor_skill", "np")
 @registry.env("vbot_navigation_section011", "np")
 class VBotSection011Env(NpEnv):
@@ -1116,6 +1117,13 @@ class VBotSection011Env(NpEnv):
         )
 
         hfield = segment == 1
+        hfield_x_range = getattr(
+            self._cfg, "curriculum_hfield_x_range", None
+        )
+        if hfield_x_range is not None:
+            spawn_x[hfield] = np.random.uniform(
+                *hfield_x_range, size=int(np.sum(hfield))
+            )
         spawn_y[hfield] = np.random.uniform(
             *self._cfg.curriculum_hfield_y_range, size=int(np.sum(hfield))
         )

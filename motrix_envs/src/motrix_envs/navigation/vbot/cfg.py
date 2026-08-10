@@ -947,6 +947,19 @@ class VBotSection011FullRouteContactEnvCfg(
     )
 
 
+@registry.envcfg("vbot_locomotion_section011_mixed_route_contact")
+@dataclass
+class VBotSection011MixedRouteContactEnvCfg(
+    VBotSection011FullRouteContactEnvCfg
+):
+    """Mix official starts with the measured rough-corridor entrance."""
+
+    curriculum_spawn_probabilities: tuple[float, ...] = (0.5, 0.5)
+    curriculum_hfield_x_range: tuple[float, float] = (0.5, 0.7)
+    curriculum_hfield_y_range: tuple[float, float] = (-1.45, -1.25)
+    curriculum_hfield_spawn_z: float = 0.65
+
+
 @registry.envcfg("vbot_navigation_section011_go1_transfer_fast_corridor_skill")
 @dataclass
 class VBotSection011Go1TransferFastCorridorSkillEnvCfg(
