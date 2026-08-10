@@ -108,8 +108,17 @@ class VBotSection011Env(NpEnv):
         self.completed_episodes = 0
         self.ever_on_platform_episodes = 0
         self.stable_success_episodes = 0
+        self.fall_episodes = 0
+        self.timeout_episodes = 0
+        self.invalid_state_episodes = 0
+        self.episode_max_y_sum = 0.0
+        self.episode_forward_progress_sum = 0.0
+        self.episode_max_y = float("-inf")
 
         self.waypoint_y = np.asarray(cfg.waypoint_y, dtype=np.float32)
+        self.waypoint_episode_histogram = np.zeros(
+            len(self.waypoint_y) + 1, dtype=np.int64
+        )
     
         # 导航统计计数器
         self.navigation_stats_step = 0
@@ -320,8 +329,8 @@ class VBotSection011Env(NpEnv):
         )
         info["stable_success"] = np.logical_or(info["stable_success"], stable_now)
 
-    def get_success_metrics(self) -> dict[str, float | int]:
-        """返回跨自动 reset 累积的回合成功率。"""
+    def get_success_metrics(self) -> dict[str, float | int | list[int]]:
+        """返回跨自动 reset 累积的导航与成功指标。"""
         total = self.completed_episodes
         denominator = max(total, 1)
         return {
@@ -330,6 +339,17 @@ class VBotSection011Env(NpEnv):
             "stable_success_episodes": self.stable_success_episodes,
             "ever_on_platform_rate": self.ever_on_platform_episodes / denominator,
             "stable_success_rate": self.stable_success_episodes / denominator,
+            "fall_episodes": self.fall_episodes,
+            "fall_rate": self.fall_episodes / denominator,
+            "timeout_episodes": self.timeout_episodes,
+            "timeout_rate": self.timeout_episodes / denominator,
+            "invalid_state_episodes": self.invalid_state_episodes,
+            "mean_episode_max_y": self.episode_max_y_sum / denominator,
+            "max_episode_y": (
+                self.episode_max_y if total else float("nan")
+            ),
+            "mean_forward_progress": self.episode_forward_progress_sum / denominator,
+            "waypoint_episode_histogram": self.waypoint_episode_histogram.tolist(),
         }
     
     def _update_target_marker(self, data: mtx.SceneData, pose_commands: np.ndarray):
@@ -423,6 +443,9 @@ class VBotSection011Env(NpEnv):
         
         # 获取基础状态
         root_pos, root_quat, root_vel = self._extract_root_state(data)
+        state.info["episode_max_y"] = np.maximum(
+            state.info["episode_max_y"], root_pos[:, 1]
+        )
         joint_pos = self.get_dof_pos(data)
         joint_vel = self.get_dof_vel(data)
         joint_pos_rel = joint_pos - self.default_angles
@@ -569,6 +592,25 @@ class VBotSection011Env(NpEnv):
             )
             self.stable_success_episodes += int(
                 np.sum(stable_success[episode_done])
+            )
+            self.fall_episodes += int(np.sum(base_contact[episode_done]))
+            self.timeout_episodes += int(np.sum(timeout[episode_done]))
+            self.invalid_state_episodes += int(
+                np.sum(invalid_quaternion[episode_done])
+            )
+
+            episode_max_y = state.info["episode_max_y"][episode_done]
+            episode_start_y = state.info["episode_start_y"][episode_done]
+            self.episode_max_y_sum += float(np.sum(episode_max_y))
+            self.episode_forward_progress_sum += float(
+                np.sum(episode_max_y - episode_start_y)
+            )
+            self.episode_max_y = max(
+                self.episode_max_y, float(np.max(episode_max_y))
+            )
+            waypoint_counts = state.info["next_waypoint_idx"][episode_done]
+            self.waypoint_episode_histogram += np.bincount(
+                waypoint_counts, minlength=len(self.waypoint_episode_histogram)
             )
         
         return state.replace(terminated=terminated)
@@ -810,6 +852,8 @@ class VBotSection011Env(NpEnv):
             "ever_reached": np.zeros(num_envs, dtype=bool),
             "min_distance": distance_to_target.copy(),  # 统一使用min_distance机制
             "previous_distance": distance_to_target.astype(np.float32),
+            "episode_start_y": root_pos[:, 1].astype(np.float32).copy(),
+            "episode_max_y": root_pos[:, 1].astype(np.float32).copy(),
             "next_waypoint_idx": np.zeros(num_envs, dtype=np.int32),
             "waypoint_reached_this_step": np.zeros(num_envs, dtype=bool),
             "on_platform": np.zeros(num_envs, dtype=bool),
