@@ -331,8 +331,15 @@ class VBotSection011EnvCfg(VBotStairsEnvCfg):
 
     # 第二版稠密奖励：增加近场路段门，避免第一道奖励离出生点过远。
     waypoint_y: tuple[float, ...] = (-1.5, -0.6, 1.2, 2.25, 4.0, 6.0, 6.9)
+    # Optional two-dimensional look-ahead targets. The base task keeps the
+    # original final-target navigation; experiment variants can enable a
+    # target for every waypoint gate without changing the observation size.
+    route_waypoint_targets: tuple[tuple[float, float], ...] | None = None
+    observe_route_target: bool = False
+    progress_uses_route_target: bool = False
     reward_tracking_linear: float = 1.5
     reward_tracking_yaw: float = 0.2
+    reward_target_direction_velocity: float = 0.0
     reward_progress: float = 20.0
     reward_waypoint: float = 10.0
     reward_first_platform: float = 25.0
@@ -574,6 +581,32 @@ class VBotSection011Go1TransferFastTerrainSkillV2EnvCfg(
     """Reinforce rare rough-terrain gate crossings during conservative fine-tuning."""
 
     reward_waypoint: float = 50.0
+
+
+@registry.envcfg("vbot_navigation_section011_go1_transfer_fast_terrain_skill_v3")
+@dataclass
+class VBotSection011Go1TransferFastTerrainSkillV3EnvCfg(
+    VBotSection011Go1TransferFastTerrainSkillEnvCfg
+):
+    """Look-ahead waypoint shaping inspired by the staged reference solution.
+
+    Each target is deliberately beyond the gate that selects it. This keeps
+    forward momentum through the heightfield instead of commanding a stop on
+    top of a difficult obstacle.
+    """
+
+    route_waypoint_targets: tuple[tuple[float, float], ...] = (
+        (0.0, -0.6),
+        (0.0, 1.2),
+        (0.0, 2.25),
+        (0.0, 4.0),
+        (0.0, 6.0),
+        (0.0, 6.9),
+        (0.0, 7.8),
+    )
+    observe_route_target: bool = True
+    progress_uses_route_target: bool = True
+    reward_target_direction_velocity: float = 1.0
 
 
 @registry.envcfg("vbot_navigation_section011_go1_transfer_fast_corridor_skill")

@@ -52,6 +52,7 @@ def generate_repeating_array(num_period, num_reset, period_counter):
 @registry.env("vbot_navigation_section011_go1_transfer_terrain_skill", "np")
 @registry.env("vbot_navigation_section011_go1_transfer_fast_terrain_skill", "np")
 @registry.env("vbot_navigation_section011_go1_transfer_fast_terrain_skill_v2", "np")
+@registry.env("vbot_navigation_section011_go1_transfer_fast_terrain_skill_v3", "np")
 @registry.env("vbot_navigation_section011_go1_transfer_fast_corridor_skill", "np")
 @registry.env("vbot_navigation_section011", "np")
 class VBotSection011Env(NpEnv):
@@ -147,6 +148,19 @@ class VBotSection011Env(NpEnv):
         self.all_time_max_waypoints = 0
 
         self.waypoint_y = np.asarray(cfg.waypoint_y, dtype=np.float32)
+        configured_route_targets = getattr(cfg, "route_waypoint_targets", None)
+        self.route_waypoint_targets = (
+            None
+            if configured_route_targets is None
+            else np.asarray(configured_route_targets, dtype=np.float32)
+        )
+        if self.route_waypoint_targets is not None:
+            expected_shape = (len(self.waypoint_y), 2)
+            if self.route_waypoint_targets.shape != expected_shape:
+                raise ValueError(
+                    "route_waypoint_targets must have shape "
+                    f"{expected_shape}, got {self.route_waypoint_targets.shape}"
+                )
         self.waypoint_episode_histogram = np.zeros(
             len(self.waypoint_y) + 1, dtype=np.int64
         )
@@ -401,9 +415,29 @@ class VBotSection011Env(NpEnv):
         return policy_lin_vel, policy_commands
 
     def _get_navigation_target(
-        self, robot_position: np.ndarray, final_target: np.ndarray
+        self,
+        robot_position: np.ndarray,
+        final_target: np.ndarray,
+        waypoint_indices: np.ndarray | None = None,
     ) -> np.ndarray:
-        """Select a staged target when a smoother heightfield corridor is configured."""
+        """Return the active 2-D route target, falling back to the final goal."""
+        if self.route_waypoint_targets is not None:
+            if waypoint_indices is None:
+                waypoint_indices = np.searchsorted(
+                    self.waypoint_y, robot_position[:, 1], side="right"
+                )
+            waypoint_indices = np.asarray(waypoint_indices, dtype=np.int32)
+            navigation_target = final_target.copy()
+            has_route_target = waypoint_indices < len(self.route_waypoint_targets)
+            safe_indices = np.minimum(
+                waypoint_indices, len(self.route_waypoint_targets) - 1
+            )
+            navigation_target[has_route_target] = self.route_waypoint_targets[
+                safe_indices[has_route_target]
+            ]
+            return navigation_target
+
+        # Legacy corridor experiments remain available as an ablation.
         corridor_x = getattr(self._cfg, "terrain_corridor_x", None)
         if corridor_x is None:
             return final_target
@@ -635,7 +669,7 @@ class VBotSection011Env(NpEnv):
         
         # 计算期望速度命令（可先经过较平缓的高度场通道）。
         navigation_target = self._get_navigation_target(
-            robot_position, target_position
+            robot_position, target_position, state.info["next_waypoint_idx"]
         )
         navigation_error = navigation_target - robot_position
         desired_vel_xy = np.clip(navigation_error * 1.0, -1.0, 1.0)
@@ -670,10 +704,19 @@ class VBotSection011Env(NpEnv):
         command_normalized = policy_commands * self.commands_scale
         last_actions = state.info["current_actions"]
         
-        # 任务相关观测
-        position_error_normalized = position_error / 5.0
-        heading_error_normalized = heading_diff / np.pi
-        distance_normalized = np.clip(distance_to_target / 5.0, 0, 1)
+        # Route variants expose the active look-ahead target in the existing
+        # task slots. The first 48 transferred GO1 inputs remain untouched.
+        if getattr(cfg, "observe_route_target", False):
+            task_position_error = navigation_error
+            task_heading_error = heading_to_movement
+            task_distance = np.linalg.norm(navigation_error, axis=1)
+        else:
+            task_position_error = position_error
+            task_heading_error = heading_diff
+            task_distance = distance_to_target
+        position_error_normalized = task_position_error / 5.0
+        heading_error_normalized = task_heading_error / np.pi
+        distance_normalized = np.clip(task_distance / 5.0, 0, 1)
         reached_flag = state.info["on_platform"].astype(np.float32)
         
         stop_ready = state.info["stable_candidate"]
@@ -701,6 +744,7 @@ class VBotSection011Env(NpEnv):
         assert obs.shape == (data.shape[0], 62)
         
         # 计算奖励
+        state.info["navigation_target"] = navigation_target.astype(np.float32)
         reward = self._compute_reward(data, state.info, velocity_commands)
         
         # 计算终止条件
@@ -797,10 +841,33 @@ class VBotSection011Env(NpEnv):
         tracking_linear = np.exp(-lin_error / 0.25)
         tracking_yaw = np.exp(-yaw_error / 0.25)
 
-        target_xy = info["pose_commands"][:, :2]
+        target_xy = (
+            info["navigation_target"]
+            if getattr(cfg, "progress_uses_route_target", False)
+            else info["pose_commands"][:, :2]
+        )
         distance = np.linalg.norm(target_xy - root_pos[:, :2], axis=1)
-        progress = np.clip(info["previous_distance"] - distance, -0.2, 0.2)
-        info["previous_distance"] = distance.astype(np.float32)
+        if getattr(cfg, "progress_uses_route_target", False):
+            target_changed = np.any(
+                np.abs(target_xy - info["previous_navigation_target"]) > 1e-5,
+                axis=1,
+            )
+            progress = np.where(
+                target_changed, 0.0, info["previous_route_distance"] - distance
+            )
+            info["previous_route_distance"] = distance.astype(np.float32)
+            info["previous_navigation_target"] = target_xy.astype(np.float32).copy()
+        else:
+            progress = info["previous_distance"] - distance
+            info["previous_distance"] = distance.astype(np.float32)
+        progress = np.clip(progress, -0.2, 0.2)
+
+        target_delta = target_xy - root_pos[:, :2]
+        target_distance = np.linalg.norm(target_delta, axis=1)
+        target_direction = target_delta / np.maximum(target_distance[:, None], 1e-6)
+        target_direction_velocity = np.clip(
+            np.sum(base_lin_vel[:, :2] * target_direction, axis=1), -1.0, 1.0
+        )
 
         waypoint_idx = info["next_waypoint_idx"]
         has_waypoint = waypoint_idx < len(self.waypoint_y)
@@ -908,6 +975,7 @@ class VBotSection011Env(NpEnv):
         reward = (
             cfg.reward_tracking_linear * tracking_linear
             + cfg.reward_tracking_yaw * tracking_yaw
+            + cfg.reward_target_direction_velocity * target_direction_velocity
             + cfg.reward_progress * progress_for_reward
             + cfg.reward_waypoint * reached_waypoint
             + cfg.reward_first_platform * info["first_on_platform"]
@@ -980,7 +1048,9 @@ class VBotSection011Env(NpEnv):
 
         # 机器人朝向当前导航阶段目标；通道路线会先对准入口。
         initial_navigation_target = self._get_navigation_target(
-            robot_init_xy, target_positions
+            robot_init_xy,
+            target_positions,
+            np.searchsorted(self.waypoint_y, robot_init_xy[:, 1], side="right"),
         )
         robot_yaw_center = np.arctan2(
             initial_navigation_target[:, 1] - robot_init_xy[:, 1],
@@ -1100,9 +1170,17 @@ class VBotSection011Env(NpEnv):
         last_actions = np.zeros((num_envs, self._num_action), dtype=np.float32)
         
         # 任务相关观测
-        position_error_normalized = position_error / 5.0
-        heading_error_normalized = heading_diff / np.pi
-        distance_normalized = np.clip(distance_to_target / 5.0, 0, 1)
+        if getattr(self._cfg, "observe_route_target", False):
+            task_position_error = navigation_error
+            task_heading_error = heading_to_movement
+            task_distance = np.linalg.norm(navigation_error, axis=1)
+        else:
+            task_position_error = position_error
+            task_heading_error = heading_diff
+            task_distance = distance_to_target
+        position_error_normalized = task_position_error / 5.0
+        heading_error_normalized = task_heading_error / np.pi
+        distance_normalized = np.clip(task_distance / 5.0, 0, 1)
         reached_flag = reached_all.astype(np.float32)
         
         stop_ready = np.logical_and(
@@ -1141,6 +1219,13 @@ class VBotSection011Env(NpEnv):
             "ever_reached": np.zeros(num_envs, dtype=bool),
             "min_distance": distance_to_target.copy(),  # 统一使用min_distance机制
             "previous_distance": distance_to_target.astype(np.float32),
+            "navigation_target": initial_navigation_target.astype(np.float32),
+            "previous_navigation_target": initial_navigation_target.astype(
+                np.float32
+            ).copy(),
+            "previous_route_distance": np.linalg.norm(
+                initial_navigation_target - robot_init_xy, axis=1
+            ).astype(np.float32),
             "episode_start_y": root_pos[:, 1].astype(np.float32).copy(),
             "episode_max_y": root_pos[:, 1].astype(np.float32).copy(),
             "next_waypoint_idx": np.searchsorted(
