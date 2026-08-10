@@ -936,18 +936,28 @@ class VBotSection011RoughCorridorContactEnvCfg(
     )
 
 
-@registry.envcfg("vbot_locomotion_section011_rough_corridor_stage2")
+@registry.envcfg("vbot_locomotion_section011_rough_corridor_stage15")
 @dataclass
-class VBotSection011RoughCorridorStage2EnvCfg(
+class VBotSection011RoughCorridorStage15EnvCfg(
     VBotSection011RoughCorridorContactEnvCfg
 ):
-    """Second rough curriculum stage: cross the y=-0.6 gate."""
+    """Intermediate rough curriculum stage: cross y=-0.7."""
 
     max_episode_seconds: float = 15.0
     max_episode_steps: int = 1500
-    skill_goal_y: float | None = -0.6
+    skill_goal_y: float | None = -0.7
     reward_skill_goal: float = 200.0
     terminate_on_skill_goal: bool = True
+
+
+@registry.envcfg("vbot_locomotion_section011_rough_corridor_stage2")
+@dataclass
+class VBotSection011RoughCorridorStage2EnvCfg(
+    VBotSection011RoughCorridorStage15EnvCfg
+):
+    """Second rough curriculum stage: cross the y=-0.6 gate."""
+
+    skill_goal_y: float | None = -0.6
 
 
 @registry.envcfg("vbot_locomotion_section011_full_route_contact")
