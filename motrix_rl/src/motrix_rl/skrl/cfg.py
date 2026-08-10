@@ -36,6 +36,7 @@ class PPOCfg(BaseRLCfg):
     # Model architecture settings
     policy_hidden_layer_sizes: tuple[int, ...] = (256, 128, 64)
     value_hidden_layer_sizes: tuple[int, ...] = (256, 128, 64)
+    initial_log_std: float = 1.0
     # Whether to share feature extraction layers between policy and value networks. only works if:
     # 1. both networks have the same architecture
     # 2. the backend is torch

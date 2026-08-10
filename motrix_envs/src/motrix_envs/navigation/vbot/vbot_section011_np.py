@@ -654,6 +654,11 @@ class VBotSection011Env(NpEnv):
         action_rate_cost = np.sum(
             np.square(info["current_actions"] - info["last_actions"]), axis=1
         )
+        commanded_speed = np.linalg.norm(velocity_commands[:, :2], axis=1)
+        planar_speed = np.linalg.norm(base_lin_vel[:, :2], axis=1)
+        stalled = np.logical_and.reduce(
+            (commanded_speed > 0.5, planar_speed < 0.1, ~info["on_platform"])
+        )
 
         try:
             base_contact = self._model.get_sensor_value("base_contact", data)
@@ -675,6 +680,7 @@ class VBotSection011Env(NpEnv):
             - cfg.penalty_torque * torque_cost
             - cfg.penalty_joint_velocity * joint_velocity_cost
             - cfg.penalty_action_rate * action_rate_cost
+            - cfg.penalty_stall * stalled
             - cfg.penalty_fall * base_contact
         )
         return reward.astype(np.float32)

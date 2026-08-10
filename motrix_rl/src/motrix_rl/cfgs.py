@@ -401,6 +401,10 @@ class navigation:
         ratio_clip: float = 0.2
         value_clip: float = 0.2
         clip_predicted_values: bool = True
+        # The framework default (log_std=1, std=2.72) makes the initial joint
+        # targets too violent for VBot. std=0.37 still explores while allowing
+        # coherent steps to survive long enough to receive navigation rewards.
+        initial_log_std: float = -1.0
 
         policy_hidden_layer_sizes: tuple[int, ...] = (512, 256, 128)
         value_hidden_layer_sizes: tuple[int, ...] = (512, 256, 128)

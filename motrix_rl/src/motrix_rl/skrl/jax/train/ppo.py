@@ -239,7 +239,10 @@ class Trainer:
                 for size in rlcfg.policy_hidden_layer_sizes:
                     x = nn.elu(nn.Dense(size)(x))
                 x = nn.Dense(self.num_actions)(x)
-                log_std = self.param("log_std", lambda _: jnp.ones(self.num_actions))
+                log_std = self.param(
+                    "log_std",
+                    lambda _: jnp.full(self.num_actions, rlcfg.initial_log_std),
+                )
                 return x, log_std, {}
 
         class Value(DeterministicMixin, Model):
