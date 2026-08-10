@@ -30,6 +30,9 @@ _SIM_BACKEND = flags.DEFINE_string(
     "The simulation backend to use.(If not specified, it will be choosen automatically)",
 )
 _NUM_ENVS = flags.DEFINE_integer("num-envs", 2048, "Number of envs to train")
+_MAX_ENV_STEPS = flags.DEFINE_integer(
+    "max-env-steps", None, "Override maximum environment transitions for short runs"
+)
 _RENDER = flags.DEFINE_bool("render", False, "Render the env")
 _TRAIN_BACKEND = flags.DEFINE_string("train-backend", "jax", "The learning backend. (jax/torch)")
 _SEED = flags.DEFINE_integer("seed", None, "Random seed for reproducibility")
@@ -59,6 +62,9 @@ def main(argv):
 
     if _NUM_ENVS.present:
         rl_override["num_envs"] = _NUM_ENVS.value
+
+    if _MAX_ENV_STEPS.present:
+        rl_override["max_env_steps"] = _MAX_ENV_STEPS.value
 
     if _RAND_SEED.value:
         rl_override["seed"] = None

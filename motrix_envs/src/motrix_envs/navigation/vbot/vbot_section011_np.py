@@ -796,7 +796,6 @@ class VBotSection011Env(NpEnv):
             ],
             axis=-1,
         )
-        print(f"obs.shape:{obs.shape}")
         assert obs.shape == (num_envs, 54)  # 54 + 1 = 55维
         
         info = {
