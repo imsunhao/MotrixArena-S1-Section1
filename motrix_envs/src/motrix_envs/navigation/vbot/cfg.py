@@ -335,7 +335,9 @@ class VBotSection011EnvCfg(VBotStairsEnvCfg):
     # original final-target navigation; experiment variants can enable a
     # target for every waypoint gate without changing the observation size.
     route_waypoint_targets: tuple[tuple[float, float], ...] | None = None
+    route_drives_commands: bool = True
     observe_route_target: bool = False
+    route_drives_commands: bool = False
     progress_uses_route_target: bool = False
     reward_tracking_linear: float = 1.5
     reward_tracking_yaw: float = 0.2

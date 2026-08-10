@@ -421,21 +421,14 @@ class VBotSection011Env(NpEnv):
         waypoint_indices: np.ndarray | None = None,
     ) -> np.ndarray:
         """Return the active 2-D route target, falling back to the final goal."""
-        if self.route_waypoint_targets is not None:
+        if self.route_waypoint_targets is not None and getattr(
+            self._cfg, "route_drives_commands", True
+        ):
             if waypoint_indices is None:
                 waypoint_indices = np.searchsorted(
                     self.waypoint_y, robot_position[:, 1], side="right"
                 )
-            waypoint_indices = np.asarray(waypoint_indices, dtype=np.int32)
-            navigation_target = final_target.copy()
-            has_route_target = waypoint_indices < len(self.route_waypoint_targets)
-            safe_indices = np.minimum(
-                waypoint_indices, len(self.route_waypoint_targets) - 1
-            )
-            navigation_target[has_route_target] = self.route_waypoint_targets[
-                safe_indices[has_route_target]
-            ]
-            return navigation_target
+            return self._get_route_target(final_target, waypoint_indices)
 
         # Legacy corridor experiments remain available as an ablation.
         corridor_x = getattr(self._cfg, "terrain_corridor_x", None)
@@ -447,6 +440,23 @@ class VBotSection011Env(NpEnv):
         navigation_target[before_exit, 0] = corridor_x
         navigation_target[before_exit, 1] = self._cfg.terrain_exit_y
         return navigation_target
+
+    def _get_route_target(
+        self, final_target: np.ndarray, waypoint_indices: np.ndarray
+    ) -> np.ndarray:
+        """Map each environment's waypoint state to its configured 2-D target."""
+        if self.route_waypoint_targets is None:
+            return final_target
+        waypoint_indices = np.asarray(waypoint_indices, dtype=np.int32)
+        route_target = final_target.copy()
+        has_route_target = waypoint_indices < len(self.route_waypoint_targets)
+        safe_indices = np.minimum(
+            waypoint_indices, len(self.route_waypoint_targets) - 1
+        )
+        route_target[has_route_target] = self.route_waypoint_targets[
+            safe_indices[has_route_target]
+        ]
+        return route_target
 
     def _update_success_state(
         self,
@@ -842,7 +852,9 @@ class VBotSection011Env(NpEnv):
         tracking_yaw = np.exp(-yaw_error / 0.25)
 
         target_xy = (
-            info["navigation_target"]
+            self._get_route_target(
+                info["pose_commands"][:, :2], info["next_waypoint_idx"]
+            )
             if getattr(cfg, "progress_uses_route_target", False)
             else info["pose_commands"][:, :2]
         )
@@ -1052,9 +1064,20 @@ class VBotSection011Env(NpEnv):
             target_positions,
             np.searchsorted(self.waypoint_y, robot_init_xy[:, 1], side="right"),
         )
+        initial_route_target = self._get_route_target(
+            target_positions,
+            np.searchsorted(self.waypoint_y, robot_init_xy[:, 1], side="right"),
+        )
+        if self.route_waypoint_targets is not None:
+            # Keep the transferred seed-73 reset distribution unchanged.
+            # A nearby waypoint exaggerates yaw when spawn x is off-center;
+            # route targets take over after the initial pose is established.
+            initial_heading_target = target_positions
+        else:
+            initial_heading_target = initial_navigation_target
         robot_yaw_center = np.arctan2(
-            initial_navigation_target[:, 1] - robot_init_xy[:, 1],
-            initial_navigation_target[:, 0] - robot_init_xy[:, 0],
+            initial_heading_target[:, 1] - robot_init_xy[:, 1],
+            initial_heading_target[:, 0] - robot_init_xy[:, 0],
         ).astype(np.float32)
         robot_yaw = robot_yaw_center + np.random.uniform(
             -self.initial_yaw_noise, self.initial_yaw_noise, size=num_envs
@@ -1220,11 +1243,11 @@ class VBotSection011Env(NpEnv):
             "min_distance": distance_to_target.copy(),  # 统一使用min_distance机制
             "previous_distance": distance_to_target.astype(np.float32),
             "navigation_target": initial_navigation_target.astype(np.float32),
-            "previous_navigation_target": initial_navigation_target.astype(
+            "previous_navigation_target": initial_route_target.astype(
                 np.float32
             ).copy(),
             "previous_route_distance": np.linalg.norm(
-                initial_navigation_target - robot_init_xy, axis=1
+                initial_route_target - robot_init_xy, axis=1
             ).astype(np.float32),
             "episode_start_y": root_pos[:, 1].astype(np.float32).copy(),
             "episode_max_y": root_pos[:, 1].astype(np.float32).copy(),
