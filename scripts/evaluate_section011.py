@@ -40,6 +40,9 @@ _MAX_CONTROL_STEPS = flags.DEFINE_integer(
 )
 _SEED = flags.DEFINE_integer("seed", 2026, "Evaluation random seed")
 _SIM_BACKEND = flags.DEFINE_string("sim-backend", None, "Simulation backend")
+_ACTION_SCALE = flags.DEFINE_float(
+    "action-scale", None, "Override the VBot joint-target action scale for evaluation"
+)
 
 
 def main(argv):
@@ -60,6 +63,10 @@ def main(argv):
     raw_env = env_registry.make(
         _ENV.value, sim_backend=_SIM_BACKEND.value, num_envs=_NUM_ENVS.value
     )
+    if _ACTION_SCALE.present:
+        if _ACTION_SCALE.value <= 0:
+            raise app.UsageError("--action-scale must be positive")
+        raw_env._cfg.control_config.action_scale = _ACTION_SCALE.value
 
     set_seed(rlcfg.seed)
     env = wrap_env(raw_env, enable_render=False)
@@ -93,6 +100,7 @@ def main(argv):
             "policy": _POLICY.value,
             "seed": _SEED.value,
             "num_envs": _NUM_ENVS.value,
+            "action_scale": raw_env._cfg.control_config.action_scale,
             "control_steps": control_steps,
             "environment_transitions": transition_count,
             "mean_step_reward": reward_sum / max(transition_count, 1),
