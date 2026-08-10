@@ -353,6 +353,8 @@ class VBotSection011EnvCfg(VBotStairsEnvCfg):
     terrain_scan_scale: float = 2.0
     penalty_orientation: float = 0.5
     penalty_vertical_velocity: float = 2.0
+    penalty_base_height: float = 2.0
+    target_base_clearance: float = 0.5
     penalty_angular_xy: float = 0.05
     penalty_torque: float = 1e-5
     penalty_joint_velocity: float = 5e-5

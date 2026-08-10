@@ -741,6 +741,13 @@ class VBotSection011Env(NpEnv):
         projected_gravity = self._compute_projected_gravity(root_quat)
         orientation_cost = np.sum(np.square(projected_gravity[:, :2]), axis=1)
         vertical_velocity_cost = np.square(base_lin_vel[:, 2])
+        terrain_height = self._sample_terrain_height(
+            root_pos[:, 0], root_pos[:, 1]
+        )
+        base_clearance = root_pos[:, 2] - terrain_height
+        base_height_cost = np.square(
+            base_clearance - cfg.target_base_clearance
+        )
         angular_xy_cost = np.sum(np.square(gyro[:, :2]), axis=1)
         torque_cost = np.sum(np.square(data.actuator_ctrls), axis=1)
         joint_velocity_cost = np.sum(np.square(self.get_dof_vel(data)), axis=1)
@@ -787,6 +794,7 @@ class VBotSection011Env(NpEnv):
             + cfg.reward_feet_air_time * feet_air_reward
             - cfg.penalty_orientation * orientation_cost
             - cfg.penalty_vertical_velocity * vertical_velocity_cost
+            - cfg.penalty_base_height * base_height_cost
             - cfg.penalty_angular_xy * angular_xy_cost
             - cfg.penalty_torque * torque_cost
             - cfg.penalty_joint_velocity * joint_velocity_cost
