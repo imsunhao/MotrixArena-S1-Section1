@@ -795,14 +795,15 @@ class VBotSection011RoughSkillV7CorridorScale060EnvCfg(
 
     spawn_x_range: tuple[float, float] = (0.5, 0.7)
     route_waypoint_targets: tuple[tuple[float, float], ...] = (
-        (0.6, -1.0),
-        (0.6, -0.8),
+        (0.6, -1.1),
+        (0.6, -0.9),
         (0.6, -0.4),
         (0.6, 1.2),
         (0.6, 2.25),
         (0.0, 4.0),
         (0.0, 7.8),
     )
+    skill_goal_y: float = -1.1
 
     @dataclass
     class ControlConfig(VBotSection011Go1TransferEnvCfg.ControlConfig):
