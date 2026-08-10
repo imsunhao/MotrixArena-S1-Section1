@@ -87,7 +87,12 @@ class Asset:
 class Sensor:
     base_linvel = "base_linvel"
     base_gyro = "base_gyro"
-    feet = ["FR", "FL", "RR", "RL"]  # 足部接触力传感器名称
+    feet = [
+        "FR_foot_contact",
+        "FL_foot_contact",
+        "RR_foot_contact",
+        "RL_foot_contact",
+    ]
 
 @dataclass
 class RewardConfig:
@@ -333,6 +338,8 @@ class VBotSection011EnvCfg(VBotStairsEnvCfg):
     reward_first_platform: float = 25.0
     reward_stable_step: float = 0.5
     reward_stable_success: float = 300.0
+    reward_feet_air_time: float = 1.0
+    minimum_swing_seconds: float = 0.15
     penalty_orientation: float = 0.5
     penalty_vertical_velocity: float = 2.0
     penalty_angular_xy: float = 0.05

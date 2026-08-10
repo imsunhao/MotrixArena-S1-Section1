@@ -454,6 +454,25 @@ class VBotSection011Env(NpEnv):
         base_lin_vel = root_vel[:, :3]  # 世界坐标系线速度
         gyro = self._model.get_sensor_value(cfg.sensor.base_gyro, data)
         projected_gravity = self._compute_projected_gravity(root_quat)
+        foot_contacts = np.column_stack(
+            [
+                np.linalg.norm(
+                    self._model.get_sensor_value(sensor_name, data), axis=1
+                )
+                > 0.01
+                for sensor_name in cfg.sensor.feet
+            ]
+        )
+        previous_contacts = state.info["contacts"]
+        first_foot_contact = np.logical_and(foot_contacts, ~previous_contacts)
+        feet_air_time = state.info["feet_air_time"] + cfg.ctrl_dt
+        state.info["feet_air_time_at_contact"] = np.where(
+            first_foot_contact, feet_air_time, 0.0
+        ).astype(np.float32)
+        state.info["feet_air_time"] = np.where(
+            foot_contacts, 0.0, feet_air_time
+        ).astype(np.float32)
+        state.info["contacts"] = foot_contacts
         self._update_success_state(
             root_pos, base_lin_vel, gyro, projected_gravity, state.info
         )
@@ -558,12 +577,13 @@ class VBotSection011Env(NpEnv):
         # 基座接触地面终止（使用传感器）
         try:
             base_contact_value = self._model.get_sensor_value("base_contact", data)
-            if base_contact_value.ndim == 0:
-                base_contact = np.array([base_contact_value > 0.01], dtype=bool)
-            elif base_contact_value.shape[0] != self._num_envs:
-                base_contact = np.full(self._num_envs, base_contact_value.flatten()[0] > 0.01, dtype=bool)
-            else:
-                base_contact = (base_contact_value > 0.01).flatten()[:self._num_envs]
+            base_contact = (
+                np.linalg.norm(
+                    np.asarray(base_contact_value).reshape(self._num_envs, -1),
+                    axis=1,
+                )
+                > 0.01
+            )
         except Exception as e:
             print(f"[Warning] 无法读取base_contact传感器: {e}")
             base_contact = np.zeros(self._num_envs, dtype=bool)
@@ -654,6 +674,14 @@ class VBotSection011Env(NpEnv):
         action_rate_cost = np.sum(
             np.square(info["current_actions"] - info["last_actions"]), axis=1
         )
+        feet_air_reward = np.sum(
+            np.clip(
+                info["feet_air_time_at_contact"] - cfg.minimum_swing_seconds,
+                0.0,
+                0.5,
+            ),
+            axis=1,
+        )
         commanded_speed = np.linalg.norm(velocity_commands[:, :2], axis=1)
         planar_speed = np.linalg.norm(base_lin_vel[:, :2], axis=1)
         stalled = np.logical_and.reduce(
@@ -662,7 +690,12 @@ class VBotSection011Env(NpEnv):
 
         try:
             base_contact = self._model.get_sensor_value("base_contact", data)
-            base_contact = np.asarray(base_contact).reshape(self._num_envs, -1).max(axis=1) > 0.01
+            base_contact = (
+                np.linalg.norm(
+                    np.asarray(base_contact).reshape(self._num_envs, -1), axis=1
+                )
+                > 0.01
+            )
         except Exception:
             base_contact = np.zeros(self._num_envs, dtype=bool)
 
@@ -674,6 +707,7 @@ class VBotSection011Env(NpEnv):
             + cfg.reward_first_platform * info["first_on_platform"]
             + cfg.reward_stable_step * info["stable_candidate"]
             + cfg.reward_stable_success * info["stable_success_this_step"]
+            + cfg.reward_feet_air_time * feet_air_reward
             - cfg.penalty_orientation * orientation_cost
             - cfg.penalty_vertical_velocity * vertical_velocity_cost
             - cfg.penalty_angular_xy * angular_xy_cost
@@ -869,6 +903,12 @@ class VBotSection011Env(NpEnv):
             "stable_hold_steps": np.zeros(num_envs, dtype=np.int32),
             "stable_success": np.zeros(num_envs, dtype=bool),
             "stable_success_this_step": np.zeros(num_envs, dtype=bool),
+            "feet_air_time": np.zeros(
+                (num_envs, self.num_foot_check), dtype=np.float32
+            ),
+            "feet_air_time_at_contact": np.zeros(
+                (num_envs, self.num_foot_check), dtype=np.float32
+            ),
             # 新增：与locomotion一致的字段
             "last_dof_vel": np.zeros((num_envs, self._num_action), dtype=np.float32),  # 上一步关节速度
             "contacts": np.zeros((num_envs, self.num_foot_check), dtype=np.bool_),  # 足部接触状态
