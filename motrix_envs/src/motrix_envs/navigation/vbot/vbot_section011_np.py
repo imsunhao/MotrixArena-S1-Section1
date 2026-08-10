@@ -159,7 +159,9 @@ class VBotSection011Env(NpEnv):
                     self.default_angles[i] = angle
         
         self._init_dof_pos[-self._num_action:] = self.default_angles
-        self.action_filter_alpha = 0.3
+        self.action_filter_alpha = float(
+            getattr(self._cfg, "action_filter_alpha", 0.3)
+        )
     
     def _find_target_marker_dof_indices(self):
         """查找target_marker在dof_pos中的索引位置"""
@@ -279,8 +281,8 @@ class VBotSection011Env(NpEnv):
         current_vel = self.get_dof_vel(data)  # [num_envs, 12]
         
         # PD控制器：tau = kp * (target - current) - kv * vel
-        kp = 80.0   # 位置增益
-        kv = 6.0    # 速度增益
+        kp = float(getattr(self._cfg.control_config, "stiffness", 80.0))
+        kv = float(getattr(self._cfg.control_config, "damping", 6.0))
         
         pos_error = target_pos - current_pos
         torques = kp * pos_error - kv * current_vel
