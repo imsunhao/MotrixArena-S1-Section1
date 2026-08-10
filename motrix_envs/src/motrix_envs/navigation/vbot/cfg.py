@@ -344,6 +344,7 @@ class VBotSection011EnvCfg(VBotStairsEnvCfg):
     reward_target_direction_velocity: float = 0.0
     reward_skill_goal: float = 0.0
     skill_goal_waypoint_idx: int | None = None
+    skill_goal_y: float | None = None
     terminate_on_skill_goal: bool = False
     navigation_speed_limit: float = 1.0
     clip_reward_nonnegative: bool = False
@@ -709,6 +710,78 @@ class VBotSection011RoughSkillV5Stage1SafeEnvCfg(
     @dataclass
     class ControlConfig(VBotSection011Go1TransferEnvCfg.ControlConfig):
         action_scale = 0.05
+
+    control_config: ControlConfig = field(default_factory=ControlConfig)
+
+
+@registry.envcfg("vbot_navigation_section011_rough_skill_v6_stage0_scale070")
+@dataclass
+class VBotSection011RoughSkillV6Stage0Scale070EnvCfg(
+    VBotSection011RoughSkillV5Stage1EnvCfg
+):
+    """Bootstrap rough locomotion on a 0.3--0.45 m reachable subgoal."""
+
+    max_episode_seconds: float = 10.0
+    max_episode_steps: int = 1000
+    route_waypoint_targets: tuple[tuple[float, float], ...] = (
+        (0.0, -1.0),
+        (0.0, -0.8),
+        (0.0, -0.4),
+        (0.0, 1.2),
+        (0.0, 2.25),
+        (0.0, 4.0),
+        (0.0, 7.8),
+    )
+    reward_progress: float = 20.0
+    reward_skill_goal: float = 200.0
+    skill_goal_waypoint_idx: int | None = None
+    skill_goal_y: float = -1.0
+
+    @dataclass
+    class ControlConfig(VBotSection011Go1TransferEnvCfg.ControlConfig):
+        action_scale = 0.07
+
+    control_config: ControlConfig = field(default_factory=ControlConfig)
+
+
+@registry.envcfg("vbot_navigation_section011_rough_skill_v6_stage0_scale075")
+@dataclass
+class VBotSection011RoughSkillV6Stage0Scale075EnvCfg(
+    VBotSection011RoughSkillV6Stage0Scale070EnvCfg
+):
+    """Stage-0 curriculum with a 0.075 joint-target action scale."""
+
+    @dataclass
+    class ControlConfig(VBotSection011Go1TransferEnvCfg.ControlConfig):
+        action_scale = 0.075
+
+    control_config: ControlConfig = field(default_factory=ControlConfig)
+
+
+@registry.envcfg("vbot_navigation_section011_rough_skill_v6_stage0_scale080")
+@dataclass
+class VBotSection011RoughSkillV6Stage0Scale080EnvCfg(
+    VBotSection011RoughSkillV6Stage0Scale070EnvCfg
+):
+    """Stage-0 curriculum with a 0.08 joint-target action scale."""
+
+    @dataclass
+    class ControlConfig(VBotSection011Go1TransferEnvCfg.ControlConfig):
+        action_scale = 0.08
+
+    control_config: ControlConfig = field(default_factory=ControlConfig)
+
+
+@registry.envcfg("vbot_navigation_section011_rough_skill_v6_stage0_scale090")
+@dataclass
+class VBotSection011RoughSkillV6Stage0Scale090EnvCfg(
+    VBotSection011RoughSkillV6Stage0Scale070EnvCfg
+):
+    """High-exploration stage-0 curriculum with a 0.09 action scale."""
+
+    @dataclass
+    class ControlConfig(VBotSection011Go1TransferEnvCfg.ControlConfig):
+        action_scale = 0.09
 
     control_config: ControlConfig = field(default_factory=ControlConfig)
 

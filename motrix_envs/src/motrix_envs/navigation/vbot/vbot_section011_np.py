@@ -57,6 +57,10 @@ def generate_repeating_array(num_period, num_reset, period_counter):
 @registry.env("vbot_navigation_section011_rough_skill_v4_safe", "np")
 @registry.env("vbot_navigation_section011_rough_skill_v5_stage1", "np")
 @registry.env("vbot_navigation_section011_rough_skill_v5_stage1_safe", "np")
+@registry.env("vbot_navigation_section011_rough_skill_v6_stage0_scale070", "np")
+@registry.env("vbot_navigation_section011_rough_skill_v6_stage0_scale075", "np")
+@registry.env("vbot_navigation_section011_rough_skill_v6_stage0_scale080", "np")
+@registry.env("vbot_navigation_section011_rough_skill_v6_stage0_scale090", "np")
 @registry.env("vbot_navigation_section011_go1_transfer_fast_corridor_skill", "np")
 @registry.env("vbot_navigation_section011", "np")
 class VBotSection011Env(NpEnv):
@@ -911,8 +915,13 @@ class VBotSection011Env(NpEnv):
             waypoint_idx + reached_waypoint.astype(np.int32), len(self.waypoint_y)
         )
         info["next_waypoint_idx"] = next_waypoint_idx
+        skill_goal_y = getattr(cfg, "skill_goal_y", None)
         skill_goal_idx = getattr(cfg, "skill_goal_waypoint_idx", None)
-        if skill_goal_idx is None:
+        if skill_goal_y is not None:
+            skill_success_this_step = np.logical_and(
+                ~info["skill_success"], root_pos[:, 1] >= skill_goal_y
+            )
+        elif skill_goal_idx is None:
             skill_success_this_step = np.zeros(self._num_envs, dtype=bool)
         else:
             skill_success_this_step = np.logical_and(
