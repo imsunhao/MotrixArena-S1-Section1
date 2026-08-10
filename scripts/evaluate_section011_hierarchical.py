@@ -63,6 +63,12 @@ _ROUGH_ACTION_SCALE = flags.DEFINE_float(
 _SLOPE_ACTION_SCALE = flags.DEFINE_float(
     "slope-action-scale", None, "Physical action scale expected by the slope policy"
 )
+_ROUGH_BLEND_STEPS = flags.DEFINE_integer(
+    "rough-blend-steps", 0, "Linearly blend base into rough actions over N steps"
+)
+_SLOPE_BLEND_STEPS = flags.DEFINE_integer(
+    "slope-blend-steps", 0, "Linearly blend rough into slope actions over N steps"
+)
 _NUM_ENVS = flags.DEFINE_integer("num-envs", 64, "Parallel environments")
 _EPISODES = flags.DEFINE_integer("episodes", 64, "Completed episode target")
 _MAX_CONTROL_STEPS = flags.DEFINE_integer(
@@ -96,6 +102,8 @@ def main(argv):
         raise app.UsageError("--slope-start-y must be after --rough-end-y")
     if _NUM_ENVS.value <= 0 or _EPISODES.value <= 0:
         raise app.UsageError("--num-envs and --episodes must be positive")
+    if _ROUGH_BLEND_STEPS.value < 0 or _SLOPE_BLEND_STEPS.value < 0:
+        raise app.UsageError("policy blend steps must be non-negative")
 
     config.jax.backend = "jax"
     trainer = ppo.Trainer(
@@ -144,6 +152,7 @@ def main(argv):
 
     obs, _ = env.reset()
     stages = np.zeros(_NUM_ENVS.value, dtype=np.int8)
+    stage_ages = np.zeros(_NUM_ENVS.value, dtype=np.int32)
     stage_entry_counts = np.zeros(4, dtype=np.int64)
     control_steps = 0
     reward_sum = 0.0
@@ -155,10 +164,12 @@ def main(argv):
 
         enter_rough = np.logical_and(stages == 0, root_y >= _ROUGH_START_Y.value)
         stages[enter_rough] = 1
+        stage_ages[enter_rough] = 0
         stage_entry_counts[1] += int(np.sum(enter_rough))
 
         leave_rough = np.logical_and(stages == 1, root_y >= _ROUGH_END_Y.value)
         stages[leave_rough] = 2
+        stage_ages[leave_rough] = 0
         stage_entry_counts[2] += int(np.sum(leave_rough))
 
         if slope_agent is not None:
@@ -166,6 +177,7 @@ def main(argv):
                 (stages == 2, root_y >= _SLOPE_START_Y.value)
             )
             stages[enter_slope] = 3
+            stage_ages[enter_slope] = 0
             stage_entry_counts[3] += int(np.sum(enter_slope))
 
         base_actions = _mean_actions(base_agent, obs) * (
@@ -174,13 +186,29 @@ def main(argv):
         rough_actions = _mean_actions(rough_agent, obs) * (
             rough_action_scale / env_action_scale
         )
+        if _ROUGH_BLEND_STEPS.value:
+            rough_alpha = np.clip(
+                (stage_ages + 1) / _ROUGH_BLEND_STEPS.value, 0.0, 1.0
+            )
+            blended_rough_actions = base_actions + jnp.asarray(rough_alpha)[:, None] * (
+                rough_actions - base_actions
+            )
+        else:
+            blended_rough_actions = rough_actions
         actions = jnp.where(
-            jnp.asarray(stages == 1)[:, None], rough_actions, base_actions
+            jnp.asarray(stages == 1)[:, None], blended_rough_actions, base_actions
         )
         if slope_agent is not None:
             slope_actions = _mean_actions(slope_agent, obs) * (
                 slope_action_scale / env_action_scale
             )
+            if _SLOPE_BLEND_STEPS.value:
+                slope_alpha = np.clip(
+                    (stage_ages + 1) / _SLOPE_BLEND_STEPS.value, 0.0, 1.0
+                )
+                slope_actions = rough_actions + jnp.asarray(slope_alpha)[:, None] * (
+                    slope_actions - rough_actions
+                )
             actions = jnp.where(
                 jnp.asarray(stages == 3)[:, None], slope_actions, actions
             )
@@ -189,9 +217,11 @@ def main(argv):
         reward_sum += float(np.sum(np.asarray(rewards)))
         transition_count += _NUM_ENVS.value
         control_steps += 1
+        stage_ages += 1
 
         reset_envs = np.asarray(raw_env.state.info["steps"]) == 0
         stages[reset_envs] = 0
+        stage_ages[reset_envs] = 0
         if raw_env.get_success_metrics()["completed_episodes"] >= _EPISODES.value:
             break
 
@@ -209,6 +239,8 @@ def main(argv):
             "base_action_scale": base_action_scale,
             "rough_action_scale": rough_action_scale,
             "slope_action_scale": slope_action_scale,
+            "rough_blend_steps": _ROUGH_BLEND_STEPS.value,
+            "slope_blend_steps": _SLOPE_BLEND_STEPS.value,
             "seed": _SEED.value,
             "num_envs": _NUM_ENVS.value,
             "control_steps": control_steps,
