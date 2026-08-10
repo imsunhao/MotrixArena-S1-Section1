@@ -66,6 +66,7 @@ def generate_repeating_array(num_period, num_reset, period_counter):
 @registry.env("vbot_navigation_section011_rough_skill_v7_corridor_scale080", "np")
 @registry.env("vbot_navigation_section011_rough_skill_v7_corridor_scale090", "np")
 @registry.env("vbot_locomotion_section011_rough_corridor", "np")
+@registry.env("vbot_locomotion_section011_rough_corridor_goal_velocity", "np")
 @registry.env("vbot_navigation_section011_go1_transfer_fast_corridor_skill", "np")
 @registry.env("vbot_navigation_section011", "np")
 class VBotSection011Env(NpEnv):

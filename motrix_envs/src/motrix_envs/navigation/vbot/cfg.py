@@ -896,6 +896,21 @@ class VBotSection011RoughCorridorLocomotionEnvCfg(
     control_config: ControlConfig = field(default_factory=ControlConfig)
 
 
+@registry.envcfg("vbot_locomotion_section011_rough_corridor_goal_velocity")
+@dataclass
+class VBotSection011RoughCorridorGoalVelocityEnvCfg(
+    VBotSection011RoughCorridorLocomotionEnvCfg
+):
+    """Remove the non-zero standing reward from fixed velocity tracking."""
+
+    navigation_speed_limit: float = 0.6
+    reward_tracking_linear: float = 0.0
+    reward_target_direction_velocity: float = 4.0
+    reward_progress: float = 5.0
+    reward_feet_air_time: float = 0.2
+    penalty_stall: float = 1.0
+
+
 @registry.envcfg("vbot_navigation_section011_go1_transfer_fast_corridor_skill")
 @dataclass
 class VBotSection011Go1TransferFastCorridorSkillEnvCfg(
