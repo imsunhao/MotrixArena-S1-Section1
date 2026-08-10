@@ -786,6 +786,73 @@ class VBotSection011RoughSkillV6Stage0Scale090EnvCfg(
     control_config: ControlConfig = field(default_factory=ControlConfig)
 
 
+@registry.envcfg("vbot_navigation_section011_rough_skill_v7_corridor_scale060")
+@dataclass
+class VBotSection011RoughSkillV7CorridorScale060EnvCfg(
+    VBotSection011RoughSkillV6Stage0Scale070EnvCfg
+):
+    """Bootstrap on the low-cross-slope corridor measured near ``x=0.6``."""
+
+    spawn_x_range: tuple[float, float] = (0.5, 0.7)
+    route_waypoint_targets: tuple[tuple[float, float], ...] = (
+        (0.6, -1.0),
+        (0.6, -0.8),
+        (0.6, -0.4),
+        (0.6, 1.2),
+        (0.6, 2.25),
+        (0.0, 4.0),
+        (0.0, 7.8),
+    )
+
+    @dataclass
+    class ControlConfig(VBotSection011Go1TransferEnvCfg.ControlConfig):
+        action_scale = 0.06
+
+    control_config: ControlConfig = field(default_factory=ControlConfig)
+
+
+@registry.envcfg("vbot_navigation_section011_rough_skill_v7_corridor_scale070")
+@dataclass
+class VBotSection011RoughSkillV7CorridorScale070EnvCfg(
+    VBotSection011RoughSkillV7CorridorScale060EnvCfg
+):
+    """Corridor bootstrap with a 0.07 action scale."""
+
+    @dataclass
+    class ControlConfig(VBotSection011Go1TransferEnvCfg.ControlConfig):
+        action_scale = 0.07
+
+    control_config: ControlConfig = field(default_factory=ControlConfig)
+
+
+@registry.envcfg("vbot_navigation_section011_rough_skill_v7_corridor_scale080")
+@dataclass
+class VBotSection011RoughSkillV7CorridorScale080EnvCfg(
+    VBotSection011RoughSkillV7CorridorScale060EnvCfg
+):
+    """Corridor bootstrap with a 0.08 action scale."""
+
+    @dataclass
+    class ControlConfig(VBotSection011Go1TransferEnvCfg.ControlConfig):
+        action_scale = 0.08
+
+    control_config: ControlConfig = field(default_factory=ControlConfig)
+
+
+@registry.envcfg("vbot_navigation_section011_rough_skill_v7_corridor_scale090")
+@dataclass
+class VBotSection011RoughSkillV7CorridorScale090EnvCfg(
+    VBotSection011RoughSkillV7CorridorScale060EnvCfg
+):
+    """Corridor bootstrap with a 0.09 action scale."""
+
+    @dataclass
+    class ControlConfig(VBotSection011Go1TransferEnvCfg.ControlConfig):
+        action_scale = 0.09
+
+    control_config: ControlConfig = field(default_factory=ControlConfig)
+
+
 @registry.envcfg("vbot_navigation_section011_go1_transfer_fast_corridor_skill")
 @dataclass
 class VBotSection011Go1TransferFastCorridorSkillEnvCfg(

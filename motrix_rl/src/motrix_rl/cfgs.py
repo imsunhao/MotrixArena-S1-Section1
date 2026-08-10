@@ -433,6 +433,10 @@ class navigation:
     @rlcfg("vbot_navigation_section011_rough_skill_v6_stage0_scale075")
     @rlcfg("vbot_navigation_section011_rough_skill_v6_stage0_scale080")
     @rlcfg("vbot_navigation_section011_rough_skill_v6_stage0_scale090")
+    @rlcfg("vbot_navigation_section011_rough_skill_v7_corridor_scale060")
+    @rlcfg("vbot_navigation_section011_rough_skill_v7_corridor_scale070")
+    @rlcfg("vbot_navigation_section011_rough_skill_v7_corridor_scale080")
+    @rlcfg("vbot_navigation_section011_rough_skill_v7_corridor_scale090")
     @rlcfg("vbot_navigation_section011_go1_transfer_fast_corridor_skill")
     @dataclass
     class VBotNavigationSection011Go1TransferPPOConfig(

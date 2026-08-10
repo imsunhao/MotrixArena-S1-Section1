@@ -54,6 +54,15 @@ _ROUGH_END_Y = flags.DEFINE_float(
 _SLOPE_START_Y = flags.DEFINE_float(
     "slope-start-y", 2.0, "Switch to the optional slope policy"
 )
+_BASE_ACTION_SCALE = flags.DEFINE_float(
+    "base-action-scale", None, "Physical action scale expected by the base policy"
+)
+_ROUGH_ACTION_SCALE = flags.DEFINE_float(
+    "rough-action-scale", None, "Physical action scale expected by the rough policy"
+)
+_SLOPE_ACTION_SCALE = flags.DEFINE_float(
+    "slope-action-scale", None, "Physical action scale expected by the slope policy"
+)
 _NUM_ENVS = flags.DEFINE_integer("num-envs", 64, "Parallel environments")
 _EPISODES = flags.DEFINE_integer("episodes", 64, "Completed episode target")
 _MAX_CONTROL_STEPS = flags.DEFINE_integer(
@@ -99,6 +108,29 @@ def main(argv):
     raw_env = env_registry.make(
         _ENV.value, sim_backend=_SIM_BACKEND.value, num_envs=_NUM_ENVS.value
     )
+    env_action_scale = float(raw_env._cfg.control_config.action_scale)
+    base_action_scale = (
+        _BASE_ACTION_SCALE.value
+        if _BASE_ACTION_SCALE.value is not None
+        else env_action_scale
+    )
+    rough_action_scale = (
+        _ROUGH_ACTION_SCALE.value
+        if _ROUGH_ACTION_SCALE.value is not None
+        else env_action_scale
+    )
+    slope_action_scale = (
+        _SLOPE_ACTION_SCALE.value
+        if _SLOPE_ACTION_SCALE.value is not None
+        else env_action_scale
+    )
+    for name, value in (
+        ("base-action-scale", base_action_scale),
+        ("rough-action-scale", rough_action_scale),
+        ("slope-action-scale", slope_action_scale),
+    ):
+        if value <= 0:
+            raise app.UsageError(f"--{name} must be positive")
     set_seed(rlcfg.seed)
     env = wrap_env(raw_env, enable_render=False)
 
@@ -136,13 +168,19 @@ def main(argv):
             stages[enter_slope] = 3
             stage_entry_counts[3] += int(np.sum(enter_slope))
 
-        base_actions = _mean_actions(base_agent, obs)
-        rough_actions = _mean_actions(rough_agent, obs)
+        base_actions = _mean_actions(base_agent, obs) * (
+            base_action_scale / env_action_scale
+        )
+        rough_actions = _mean_actions(rough_agent, obs) * (
+            rough_action_scale / env_action_scale
+        )
         actions = jnp.where(
             jnp.asarray(stages == 1)[:, None], rough_actions, base_actions
         )
         if slope_agent is not None:
-            slope_actions = _mean_actions(slope_agent, obs)
+            slope_actions = _mean_actions(slope_agent, obs) * (
+                slope_action_scale / env_action_scale
+            )
             actions = jnp.where(
                 jnp.asarray(stages == 3)[:, None], slope_actions, actions
             )
@@ -167,6 +205,10 @@ def main(argv):
             "base_policy": _BASE_POLICY.value,
             "rough_policy": _ROUGH_POLICY.value,
             "slope_policy": _SLOPE_POLICY.value,
+            "environment_action_scale": env_action_scale,
+            "base_action_scale": base_action_scale,
+            "rough_action_scale": rough_action_scale,
+            "slope_action_scale": slope_action_scale,
             "seed": _SEED.value,
             "num_envs": _NUM_ENVS.value,
             "control_steps": control_steps,
