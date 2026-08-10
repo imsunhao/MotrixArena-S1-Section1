@@ -441,6 +441,8 @@ class VBotSection011SafeProgressEnvCfg(VBotSection011EnvCfg):
 class VBotSection011Go1TransferEnvCfg(VBotSection011SafeProgressEnvCfg):
     """Section 1 controls aligned with the pretrained GO1 locomotion policy."""
 
+    body_frame_locomotion_observations: bool = True
+
     @dataclass
     class ControlConfig:
         action_scale = 0.05

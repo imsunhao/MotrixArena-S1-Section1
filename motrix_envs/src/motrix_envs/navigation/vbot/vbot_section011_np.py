@@ -359,6 +359,26 @@ class VBotSection011Env(NpEnv):
         delta = ahead_height - current_height[:, None]
         return np.clip(delta * self._cfg.terrain_scan_scale, -1.0, 1.0)
 
+    def _get_policy_frame_motion(
+        self,
+        root_quat: np.ndarray,
+        base_lin_vel: np.ndarray,
+        velocity_commands: np.ndarray,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Return locomotion inputs in the frame expected by the policy."""
+        if not getattr(self._cfg, "body_frame_locomotion_observations", False):
+            return base_lin_vel, velocity_commands
+
+        policy_lin_vel = Quaternion.rotate_inverse(root_quat, base_lin_vel)
+        command_world = np.column_stack(
+            [velocity_commands[:, :2], np.zeros(len(velocity_commands))]
+        ).astype(np.float32)
+        command_local = Quaternion.rotate_inverse(root_quat, command_world)
+        policy_commands = np.column_stack(
+            [command_local[:, :2], velocity_commands[:, 2]]
+        ).astype(np.float32)
+        return policy_lin_vel, policy_commands
+
     def _update_success_state(
         self,
         root_pos: np.ndarray,
@@ -598,11 +618,14 @@ class VBotSection011Env(NpEnv):
         )
         
         # 归一化观测
-        noisy_linvel = base_lin_vel * cfg.normalization.lin_vel
+        policy_lin_vel, policy_commands = self._get_policy_frame_motion(
+            root_quat, base_lin_vel, velocity_commands
+        )
+        noisy_linvel = policy_lin_vel * cfg.normalization.lin_vel
         noisy_gyro = gyro * cfg.normalization.ang_vel
         noisy_joint_angle = joint_pos_rel * cfg.normalization.dof_pos
         noisy_joint_vel = joint_vel * cfg.normalization.dof_vel
-        command_normalized = velocity_commands * self.commands_scale
+        command_normalized = policy_commands * self.commands_scale
         last_actions = state.info["current_actions"]
         
         # 任务相关观测
@@ -977,11 +1000,14 @@ class VBotSection011Env(NpEnv):
         )
         
         # 归一化观测
-        noisy_linvel = base_lin_vel * self._cfg.normalization.lin_vel
+        policy_lin_vel, policy_commands = self._get_policy_frame_motion(
+            root_quat, base_lin_vel, velocity_commands
+        )
+        noisy_linvel = policy_lin_vel * self._cfg.normalization.lin_vel
         noisy_gyro = gyro * self._cfg.normalization.ang_vel
         noisy_joint_angle = joint_pos_rel * self._cfg.normalization.dof_pos
         noisy_joint_vel = joint_vel * self._cfg.normalization.dof_vel
-        command_normalized = velocity_commands * self.commands_scale
+        command_normalized = policy_commands * self.commands_scale
         last_actions = np.zeros((num_envs, self._num_action), dtype=np.float32)
         
         # 任务相关观测
