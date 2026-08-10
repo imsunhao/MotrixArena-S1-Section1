@@ -386,6 +386,7 @@ class navigation:
     @rlcfg("vbot_locomotion_section011_rough_corridor")
     @rlcfg("vbot_locomotion_section011_rough_corridor_goal_velocity")
     @rlcfg("vbot_locomotion_section011_rough_corridor_contact")
+    @rlcfg("vbot_locomotion_section011_rough_entry")
     @rlcfg("vbot_locomotion_section011_rough_corridor_stage125")
     @rlcfg("vbot_locomotion_section011_rough_corridor_stage15")
     @rlcfg("vbot_locomotion_section011_rough_corridor_stage2")

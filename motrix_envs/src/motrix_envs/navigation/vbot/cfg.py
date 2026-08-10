@@ -936,6 +936,23 @@ class VBotSection011RoughCorridorContactEnvCfg(
     )
 
 
+@registry.envcfg("vbot_locomotion_section011_rough_entry")
+@dataclass
+class VBotSection011RoughEntryEnvCfg(
+    VBotSection011RoughCorridorContactEnvCfg
+):
+    """Bridge the flat approach state distribution into the heightfield."""
+
+    curriculum_spawn_probabilities: tuple[float, ...] | None = None
+    spawn_x_range: tuple[float, float] = (0.5, 0.7)
+    spawn_y_range: tuple[float, float] = (-1.85, -1.65)
+    max_episode_seconds: float = 15.0
+    max_episode_steps: int = 1500
+    skill_goal_y: float | None = -1.3
+    reward_skill_goal: float = 200.0
+    terminate_on_skill_goal: bool = True
+
+
 @registry.envcfg("vbot_locomotion_section011_rough_corridor_stage125")
 @dataclass
 class VBotSection011RoughCorridorStage125EnvCfg(
