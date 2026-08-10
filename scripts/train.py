@@ -36,6 +36,15 @@ _MAX_ENV_STEPS = flags.DEFINE_integer(
 _INITIAL_POLICY = flags.DEFINE_string(
     "initial-policy", None, "Optional checkpoint used to warm-start training"
 )
+_LEARNING_RATE = flags.DEFINE_float(
+    "learning-rate", None, "Override the PPO learning rate"
+)
+_LEARNING_EPOCHS = flags.DEFINE_integer(
+    "learning-epochs", None, "Override PPO epochs per rollout"
+)
+_RATIO_CLIP = flags.DEFINE_float(
+    "ratio-clip", None, "Override the PPO policy ratio clipping range"
+)
 _RENDER = flags.DEFINE_bool("render", False, "Render the env")
 _TRAIN_BACKEND = flags.DEFINE_string("train-backend", "jax", "The learning backend. (jax/torch)")
 _SEED = flags.DEFINE_integer("seed", None, "Random seed for reproducibility")
@@ -68,6 +77,21 @@ def main(argv):
 
     if _MAX_ENV_STEPS.present:
         rl_override["max_env_steps"] = _MAX_ENV_STEPS.value
+
+    if _LEARNING_RATE.present:
+        if _LEARNING_RATE.value <= 0:
+            raise app.UsageError("--learning-rate must be positive")
+        rl_override["learning_rate"] = _LEARNING_RATE.value
+
+    if _LEARNING_EPOCHS.present:
+        if _LEARNING_EPOCHS.value <= 0:
+            raise app.UsageError("--learning-epochs must be positive")
+        rl_override["learning_epochs"] = _LEARNING_EPOCHS.value
+
+    if _RATIO_CLIP.present:
+        if not 0 < _RATIO_CLIP.value <= 1:
+            raise app.UsageError("--ratio-clip must be in (0, 1]")
+        rl_override["ratio_clip"] = _RATIO_CLIP.value
 
     if _RAND_SEED.value:
         rl_override["seed"] = None
