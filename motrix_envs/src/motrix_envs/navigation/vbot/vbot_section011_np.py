@@ -1000,7 +1000,12 @@ class VBotSection011Env(NpEnv):
             base_clearance - cfg.target_base_clearance
         )
         progress_for_reward = progress
-        if getattr(cfg, "gate_progress_by_stability", False):
+        target_direction_velocity_for_reward = target_direction_velocity
+        gate_progress = getattr(cfg, "gate_progress_by_stability", False)
+        gate_target_velocity = getattr(
+            cfg, "gate_target_direction_velocity_by_stability", False
+        )
+        if gate_progress or gate_target_velocity:
             upright_score = np.clip(
                 (-projected_gravity[:, 2] - 0.7) / 0.3, 0.0, 1.0
             )
@@ -1008,8 +1013,15 @@ class VBotSection011Env(NpEnv):
                 (base_clearance - 0.25) / 0.25, 0.0, 1.0
             )
             safety_score = np.minimum(upright_score, clearance_score)
+        if gate_progress:
             progress_for_reward = np.where(
                 progress > 0.0, progress * safety_score, progress
+            )
+        if gate_target_velocity:
+            target_direction_velocity_for_reward = np.where(
+                target_direction_velocity > 0.0,
+                target_direction_velocity * safety_score,
+                target_direction_velocity,
             )
         angular_xy_cost = np.sum(np.square(gyro[:, :2]), axis=1)
         torque_cost = np.sum(np.square(data.actuator_ctrls), axis=1)
@@ -1073,7 +1085,8 @@ class VBotSection011Env(NpEnv):
         reward = (
             cfg.reward_tracking_linear * tracking_linear
             + cfg.reward_tracking_yaw * tracking_yaw
-            + cfg.reward_target_direction_velocity * target_direction_velocity
+            + cfg.reward_target_direction_velocity
+            * target_direction_velocity_for_reward
             + cfg.reward_skill_goal * skill_success_this_step
             + cfg.reward_progress * progress_for_reward
             + cfg.reward_waypoint * reached_waypoint

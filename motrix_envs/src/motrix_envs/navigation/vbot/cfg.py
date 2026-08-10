@@ -909,6 +909,7 @@ class VBotSection011RoughCorridorGoalVelocityEnvCfg(
     reward_progress: float = 5.0
     reward_feet_air_time: float = 0.2
     penalty_stall: float = 1.0
+    gate_target_direction_velocity_by_stability: bool = True
 
 
 @registry.envcfg("vbot_locomotion_section011_rough_corridor_contact")
