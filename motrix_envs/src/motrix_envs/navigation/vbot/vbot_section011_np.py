@@ -960,8 +960,15 @@ class VBotSection011Env(NpEnv):
         
         pose_commands = np.concatenate([target_positions, target_headings], axis=1)
 
-        # 机器人朝向目标，保留少量 yaw 扰动增强鲁棒性。
-        robot_yaw = target_yaw + np.random.uniform(
+        # 机器人朝向当前导航阶段目标；通道路线会先对准入口。
+        initial_navigation_target = self._get_navigation_target(
+            robot_init_xy, target_positions
+        )
+        robot_yaw_center = np.arctan2(
+            initial_navigation_target[:, 1] - robot_init_xy[:, 1],
+            initial_navigation_target[:, 0] - robot_init_xy[:, 0],
+        ).astype(np.float32)
+        robot_yaw = robot_yaw_center + np.random.uniform(
             -self.initial_yaw_noise, self.initial_yaw_noise, size=num_envs
         ).astype(np.float32)
         dof_pos[:, 6:10] = np.column_stack([
