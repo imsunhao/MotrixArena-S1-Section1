@@ -513,11 +513,6 @@ class VBotSection011Env(NpEnv):
         )
         assert obs.shape == (data.shape[0], 54)  # 54 + 1 = 55维
         
-        # 更新目标标记和箭头
-        self._update_target_marker(data, pose_commands)
-        base_lin_vel_xy = base_lin_vel[:, :2]
-        self._update_heading_arrows(data, root_pos, desired_vel_xy, base_lin_vel_xy)
-        
         # 计算奖励
         reward = self._compute_reward(data, state.info, velocity_commands)
         
@@ -551,7 +546,15 @@ class VBotSection011Env(NpEnv):
             base_contact = np.zeros(self._num_envs, dtype=bool)
         
         stable_success = state.info["stable_success"]
-        terminated = np.logical_or(base_contact, stable_success)
+        base_quat = data.dof_pos[:, self._base_quat_start:self._base_quat_end]
+        quat_norm = np.linalg.norm(base_quat, axis=1)
+        invalid_quaternion = np.logical_or(
+            ~np.isfinite(base_quat).all(axis=1),
+            np.logical_or(quat_norm < 0.5, quat_norm > 1.5),
+        )
+        terminated = np.logical_or.reduce(
+            (base_contact, stable_success, invalid_quaternion)
+        )
 
         max_steps = self._cfg.max_episode_steps
         if max_steps is None:
