@@ -426,6 +426,15 @@ class VBotSection011LowActionEnvCfg(VBotSection011EnvCfg):
 
     control_config: ControlConfig = field(default_factory=ControlConfig)
 
+
+@registry.envcfg("vbot_navigation_section011_safe_progress")
+@dataclass
+class VBotSection011SafeProgressEnvCfg(VBotSection011EnvCfg):
+    """Discourage fast lunges that trade a waypoint for an immediate fall."""
+
+    gate_progress_by_stability: bool = True
+    penalty_fall: float = 100.0
+
 @registry.envcfg("vbot_navigation_section012")
 #通过 @registry.envcfg("vbot_navigation_section012") 注册
 @dataclass

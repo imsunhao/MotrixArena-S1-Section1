@@ -40,6 +40,7 @@ def generate_repeating_array(num_period, num_reset, period_counter):
 @registry.env("vbot_navigation_section011_curriculum", "np")
 @registry.env("vbot_navigation_section011_no_overstay", "np")
 @registry.env("vbot_navigation_section011_low_action", "np")
+@registry.env("vbot_navigation_section011_safe_progress", "np")
 @registry.env("vbot_navigation_section011", "np")
 class VBotSection011Env(NpEnv):
     """
@@ -756,6 +757,18 @@ class VBotSection011Env(NpEnv):
         base_height_cost = np.square(
             base_clearance - cfg.target_base_clearance
         )
+        progress_for_reward = progress
+        if getattr(cfg, "gate_progress_by_stability", False):
+            upright_score = np.clip(
+                (-projected_gravity[:, 2] - 0.7) / 0.3, 0.0, 1.0
+            )
+            clearance_score = np.clip(
+                (base_clearance - 0.25) / 0.25, 0.0, 1.0
+            )
+            safety_score = np.minimum(upright_score, clearance_score)
+            progress_for_reward = np.where(
+                progress > 0.0, progress * safety_score, progress
+            )
         angular_xy_cost = np.sum(np.square(gyro[:, :2]), axis=1)
         torque_cost = np.sum(np.square(data.actuator_ctrls), axis=1)
         joint_velocity_cost = np.sum(np.square(self.get_dof_vel(data)), axis=1)
@@ -794,7 +807,7 @@ class VBotSection011Env(NpEnv):
         reward = (
             cfg.reward_tracking_linear * tracking_linear
             + cfg.reward_tracking_yaw * tracking_yaw
-            + cfg.reward_progress * progress
+            + cfg.reward_progress * progress_for_reward
             + cfg.reward_waypoint * reached_waypoint
             + cfg.reward_first_platform * info["first_on_platform"]
             + cfg.reward_stable_step * info["stable_candidate"]
