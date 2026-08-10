@@ -414,6 +414,9 @@ class navigation:
         value_hidden_layer_sizes: tuple[int, ...] = (512, 256, 128)
 
     @rlcfg("vbot_navigation_section011_go1_transfer")
+    @rlcfg("vbot_navigation_section011_go1_transfer_fast")
+    @rlcfg("vbot_navigation_section011_go1_transfer_curriculum")
+    @rlcfg("vbot_navigation_section011_go1_transfer_fast_curriculum")
     @dataclass
     class VBotNavigationSection011Go1TransferPPOConfig(
         VBotNavigationSection01PPOConfig

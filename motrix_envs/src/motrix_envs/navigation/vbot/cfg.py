@@ -452,6 +452,44 @@ class VBotSection011Go1TransferEnvCfg(VBotSection011SafeProgressEnvCfg):
 
     control_config: ControlConfig = field(default_factory=ControlConfig)
 
+
+@registry.envcfg("vbot_navigation_section011_go1_transfer_fast")
+@dataclass
+class VBotSection011Go1TransferFastEnvCfg(VBotSection011Go1TransferEnvCfg):
+    """More aggressive GO1 transfer control found by the action-scale sweep."""
+
+    @dataclass
+    class ControlConfig(VBotSection011Go1TransferEnvCfg.ControlConfig):
+        action_scale = 0.06
+
+    control_config: ControlConfig = field(default_factory=ControlConfig)
+
+
+@registry.envcfg("vbot_navigation_section011_go1_transfer_curriculum")
+@dataclass
+class VBotSection011Go1TransferCurriculumEnvCfg(
+    VBotSection011Go1TransferEnvCfg
+):
+    """GO1 transfer with a minority of starts at the rough-terrain entrance."""
+
+    curriculum_spawn_probabilities: tuple[float, ...] = (0.65, 0.35)
+    curriculum_hfield_y_range: tuple[float, float] = (-1.45, -1.25)
+    curriculum_hfield_spawn_z: float = 0.65
+
+
+@registry.envcfg("vbot_navigation_section011_go1_transfer_fast_curriculum")
+@dataclass
+class VBotSection011Go1TransferFastCurriculumEnvCfg(
+    VBotSection011Go1TransferCurriculumEnvCfg
+):
+    """Rough-terrain curriculum using the faster 0.06 action scale."""
+
+    @dataclass
+    class ControlConfig(VBotSection011Go1TransferEnvCfg.ControlConfig):
+        action_scale = 0.06
+
+    control_config: ControlConfig = field(default_factory=ControlConfig)
+
 @registry.envcfg("vbot_navigation_section012")
 #通过 @registry.envcfg("vbot_navigation_section012") 注册
 @dataclass
