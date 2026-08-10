@@ -142,10 +142,15 @@ class VBotSection011Env(NpEnv):
         self.episode_max_y_sum = 0.0
         self.episode_forward_progress_sum = 0.0
         self.episode_max_y = float("-inf")
+        self.all_time_max_y = float("-inf")
+        self.all_time_max_waypoints = 0
 
         self.waypoint_y = np.asarray(cfg.waypoint_y, dtype=np.float32)
         self.waypoint_episode_histogram = np.zeros(
             len(self.waypoint_y) + 1, dtype=np.int64
+        )
+        self.waypoint_crossing_counts = np.zeros(
+            len(self.waypoint_y), dtype=np.int64
         )
     
         # 导航统计计数器
@@ -472,8 +477,11 @@ class VBotSection011Env(NpEnv):
             "max_episode_y": (
                 self.episode_max_y if total else float("nan")
             ),
+            "all_time_max_y": self.all_time_max_y,
+            "all_time_max_waypoints": self.all_time_max_waypoints,
             "mean_forward_progress": self.episode_forward_progress_sum / denominator,
             "waypoint_episode_histogram": self.waypoint_episode_histogram.tolist(),
+            "waypoint_crossing_counts": self.waypoint_crossing_counts.tolist(),
         }
     
     def _update_target_marker(self, data: mtx.SceneData, pose_commands: np.ndarray):
@@ -802,6 +810,17 @@ class VBotSection011Env(NpEnv):
         info["waypoint_reached_this_step"] = reached_waypoint
         info["next_waypoint_idx"] = np.minimum(
             waypoint_idx + reached_waypoint.astype(np.int32), len(self.waypoint_y)
+        )
+        if np.any(reached_waypoint):
+            self.waypoint_crossing_counts += np.bincount(
+                safe_idx[reached_waypoint], minlength=len(self.waypoint_y)
+            )
+        self.all_time_max_y = max(
+            self.all_time_max_y, float(np.max(root_pos[:, 1]))
+        )
+        self.all_time_max_waypoints = max(
+            self.all_time_max_waypoints,
+            int(np.max(info["next_waypoint_idx"])),
         )
 
         projected_gravity = self._compute_projected_gravity(root_quat)
