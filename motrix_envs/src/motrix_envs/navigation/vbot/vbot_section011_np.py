@@ -406,8 +406,6 @@ class VBotSection011Env(NpEnv):
         before_exit = robot_position[:, 1] < self._cfg.terrain_exit_y
         navigation_target[before_exit, 0] = corridor_x
         navigation_target[before_exit, 1] = self._cfg.terrain_exit_y
-        before_entry = robot_position[:, 1] < self._cfg.terrain_entry_y
-        navigation_target[before_entry, 1] = self._cfg.terrain_entry_y
         return navigation_target
 
     def _update_success_state(
