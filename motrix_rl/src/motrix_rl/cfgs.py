@@ -413,6 +413,16 @@ class navigation:
         policy_hidden_layer_sizes: tuple[int, ...] = (512, 256, 128)
         value_hidden_layer_sizes: tuple[int, ...] = (512, 256, 128)
 
+    @rlcfg("vbot_navigation_section011_go1_transfer")
+    @dataclass
+    class VBotNavigationSection011Go1TransferPPOConfig(
+        VBotNavigationSection01PPOConfig
+    ):
+        """Network shape compatible with the GO1 flat locomotion policy."""
+
+        policy_hidden_layer_sizes: tuple[int, ...] = (256, 128, 64)
+        value_hidden_layer_sizes: tuple[int, ...] = (256, 128, 64)
+
     @dataclass
     class VBotNavigationSection02PPOConfig(PPOCfg):
         """VBot Section02导航配置，与flatnavigation一致"""

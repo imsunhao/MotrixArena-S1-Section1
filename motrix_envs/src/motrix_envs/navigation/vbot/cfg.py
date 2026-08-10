@@ -435,6 +435,18 @@ class VBotSection011SafeProgressEnvCfg(VBotSection011EnvCfg):
     gate_progress_by_stability: bool = True
     penalty_fall: float = 100.0
 
+
+@registry.envcfg("vbot_navigation_section011_go1_transfer")
+@dataclass
+class VBotSection011Go1TransferEnvCfg(VBotSection011SafeProgressEnvCfg):
+    """Section 1 controls aligned with the pretrained GO1 locomotion policy."""
+
+    @dataclass
+    class ControlConfig:
+        action_scale = 0.05
+
+    control_config: ControlConfig = field(default_factory=ControlConfig)
+
 @registry.envcfg("vbot_navigation_section012")
 #通过 @registry.envcfg("vbot_navigation_section012") 注册
 @dataclass
