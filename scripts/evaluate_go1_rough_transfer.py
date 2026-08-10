@@ -85,9 +85,10 @@ def main(argv):
 
     while control_steps < _MAX_CONTROL_STEPS.value:
         root_pos = raw_env._body.get_position(raw_env.state.data)
-        # The task's flat warm-up plane is at z=-2.5. Curriculum terrain
-        # origins use z=0.5 or z=2.0, so this cleanly separates the phases.
-        rough_mask = np.asarray(root_pos[:, 2] > 0.0)
+        rough_geom = raw_env._model.get_geom("floor_rough")
+        rough_mask = raw_env._is_in_area(
+            root_pos, 19.0, 19.0, rough_geom.local_pose[:2]
+        )
         episode_is_rough |= rough_mask
 
         commands = np.asarray(raw_env.state.info["commands"])
