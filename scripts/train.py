@@ -33,6 +33,9 @@ _NUM_ENVS = flags.DEFINE_integer("num-envs", 2048, "Number of envs to train")
 _MAX_ENV_STEPS = flags.DEFINE_integer(
     "max-env-steps", None, "Override maximum environment transitions for short runs"
 )
+_CHECKPOINT_INTERVAL = flags.DEFINE_integer(
+    "checkpoint-interval", None, "Override checkpoint interval in batched steps"
+)
 _INITIAL_POLICY = flags.DEFINE_string(
     "initial-policy", None, "Optional checkpoint used to warm-start training"
 )
@@ -82,6 +85,11 @@ def main(argv):
 
     if _MAX_ENV_STEPS.present:
         rl_override["max_env_steps"] = _MAX_ENV_STEPS.value
+
+    if _CHECKPOINT_INTERVAL.present:
+        if _CHECKPOINT_INTERVAL.value <= 0:
+            raise app.UsageError("--checkpoint-interval must be positive")
+        rl_override["check_point_interval"] = _CHECKPOINT_INTERVAL.value
 
     if _LEARNING_RATE.present:
         if _LEARNING_RATE.value <= 0:
