@@ -465,6 +465,18 @@ class VBotSection011Go1TransferFastEnvCfg(VBotSection011Go1TransferEnvCfg):
     control_config: ControlConfig = field(default_factory=ControlConfig)
 
 
+@registry.envcfg("vbot_navigation_section011_go1_transfer_medium")
+@dataclass
+class VBotSection011Go1TransferMediumEnvCfg(VBotSection011Go1TransferEnvCfg):
+    """Balanced transfer control selected by the 0.04–0.075 scale sweep."""
+
+    @dataclass
+    class ControlConfig(VBotSection011Go1TransferEnvCfg.ControlConfig):
+        action_scale = 0.055
+
+    control_config: ControlConfig = field(default_factory=ControlConfig)
+
+
 @registry.envcfg("vbot_navigation_section011_go1_transfer_curriculum")
 @dataclass
 class VBotSection011Go1TransferCurriculumEnvCfg(
@@ -487,6 +499,20 @@ class VBotSection011Go1TransferFastCurriculumEnvCfg(
     @dataclass
     class ControlConfig(VBotSection011Go1TransferEnvCfg.ControlConfig):
         action_scale = 0.06
+
+    control_config: ControlConfig = field(default_factory=ControlConfig)
+
+
+@registry.envcfg("vbot_navigation_section011_go1_transfer_medium_curriculum")
+@dataclass
+class VBotSection011Go1TransferMediumCurriculumEnvCfg(
+    VBotSection011Go1TransferCurriculumEnvCfg
+):
+    """Rough-terrain curriculum using the balanced 0.055 action scale."""
+
+    @dataclass
+    class ControlConfig(VBotSection011Go1TransferEnvCfg.ControlConfig):
+        action_scale = 0.055
 
     control_config: ControlConfig = field(default_factory=ControlConfig)
 
