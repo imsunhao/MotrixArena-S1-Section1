@@ -13,4 +13,6 @@
 # limitations under the License.
 # ==============================================================================
 
-from . import basic, locomotion, manipulation, navigation  # noqa: F401
+from . import cfg, vbot_section011_np  # noqa: F401
+from .cfg import VBotSection011EnvCfg  # noqa: F401
+from .vbot_section011_np import VBotSection011Env  # noqa: F401
