@@ -378,6 +378,7 @@ class navigation:
         mini_batches: int = 3
         learning_rate: float = 3e-4
 
+    @rlcfg("vbot_navigation_section011_curriculum")
     @rlcfg("vbot_navigation_section011")
     @rlcfg("vbot_navigation_section01")
     @dataclass

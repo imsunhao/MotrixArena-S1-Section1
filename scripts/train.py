@@ -33,6 +33,9 @@ _NUM_ENVS = flags.DEFINE_integer("num-envs", 2048, "Number of envs to train")
 _MAX_ENV_STEPS = flags.DEFINE_integer(
     "max-env-steps", None, "Override maximum environment transitions for short runs"
 )
+_INITIAL_POLICY = flags.DEFINE_string(
+    "initial-policy", None, "Optional checkpoint used to warm-start training"
+)
 _RENDER = flags.DEFINE_bool("render", False, "Render the env")
 _TRAIN_BACKEND = flags.DEFINE_string("train-backend", "jax", "The learning backend. (jax/torch)")
 _SEED = flags.DEFINE_integer("seed", None, "Random seed for reproducibility")
@@ -93,7 +96,7 @@ def main(argv):
     else:
         raise Exception(f"Unknown train backend: {train_backend}")
 
-    trainer.train()
+    trainer.train(initial_policy=_INITIAL_POLICY.value)
 
 
 if __name__ == "__main__":

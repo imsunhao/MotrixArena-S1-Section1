@@ -37,6 +37,7 @@ def generate_repeating_array(num_period, num_reset, period_counter):
     return np.array(idx)
 
 
+@registry.env("vbot_navigation_section011_curriculum", "np")
 @registry.env("vbot_navigation_section011", "np")
 class VBotSection011Env(NpEnv):
     """
@@ -719,14 +720,54 @@ class VBotSection011Env(NpEnv):
         )
         return reward.astype(np.float32)
 
+    def _sample_spawn_points(self, num_envs: int) -> tuple[np.ndarray, np.ndarray]:
+        """Sample official starts, or local-skill starts for curriculum training."""
+        spawn_x = np.random.uniform(*self.spawn_x_range, size=num_envs).astype(
+            np.float32
+        )
+        spawn_y = np.random.uniform(*self.spawn_y_range, size=num_envs).astype(
+            np.float32
+        )
+        spawn_z = np.full(num_envs, self.spawn_height, dtype=np.float32)
+
+        probabilities = getattr(
+            self._cfg, "curriculum_spawn_probabilities", None
+        )
+        if probabilities is None:
+            return np.column_stack((spawn_x, spawn_y)), spawn_z
+
+        segment = np.random.choice(
+            len(probabilities), size=num_envs, p=np.asarray(probabilities)
+        )
+
+        hfield = segment == 1
+        spawn_y[hfield] = np.random.uniform(
+            *self._cfg.curriculum_hfield_y_range, size=int(np.sum(hfield))
+        )
+        # The heightfield peaks at 0.277 m; start above it and let the robot settle.
+        spawn_z[hfield] = 0.85
+
+        ramp = segment == 2
+        spawn_y[ramp] = np.random.uniform(
+            *self._cfg.curriculum_ramp_y_range, size=int(np.sum(ramp))
+        )
+        # Collision ramp rises approximately 15 degrees from y=2.0.
+        ramp_surface = np.tan(np.deg2rad(15.0)) * (spawn_y[ramp] - 2.0)
+        spawn_z[ramp] = ramp_surface + self.spawn_height
+
+        platform = segment == 3
+        spawn_y[platform] = np.random.uniform(
+            *self._cfg.curriculum_platform_y_range, size=int(np.sum(platform))
+        )
+        # Platform top is about z=1.294 m.
+        spawn_z[platform] = 1.294 + self.spawn_height
+
+        return np.column_stack((spawn_x, spawn_y)), spawn_z
+
     def reset(self, data: mtx.SceneData, done: np.ndarray = None) -> tuple[np.ndarray, dict]:
         num_envs = data.shape[0]
         
-        # 在起跑线全宽内独立采样 x/y；起跑区域是 z=0 的平地。
-        spawn_x = np.random.uniform(*self.spawn_x_range, size=num_envs).astype(np.float32)
-        spawn_y = np.random.uniform(*self.spawn_y_range, size=num_envs).astype(np.float32)
-        robot_init_xy = np.column_stack([spawn_x, spawn_y])
-        terrain_heights = np.full(num_envs, self.spawn_height, dtype=np.float32)
+        robot_init_xy, terrain_heights = self._sample_spawn_points(num_envs)
         robot_init_xyz = np.column_stack([robot_init_xy, terrain_heights])
         
         dof_pos = np.tile(self._init_dof_pos, (num_envs, 1))
@@ -894,7 +935,9 @@ class VBotSection011Env(NpEnv):
             "previous_distance": distance_to_target.astype(np.float32),
             "episode_start_y": root_pos[:, 1].astype(np.float32).copy(),
             "episode_max_y": root_pos[:, 1].astype(np.float32).copy(),
-            "next_waypoint_idx": np.zeros(num_envs, dtype=np.int32),
+            "next_waypoint_idx": np.searchsorted(
+                self.waypoint_y, root_pos[:, 1], side="right"
+            ).astype(np.int32),
             "waypoint_reached_this_step": np.zeros(num_envs, dtype=bool),
             "on_platform": np.zeros(num_envs, dtype=bool),
             "first_on_platform": np.zeros(num_envs, dtype=bool),

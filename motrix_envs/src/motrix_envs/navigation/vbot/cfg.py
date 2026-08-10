@@ -380,6 +380,17 @@ class VBotSection011EnvCfg(VBotStairsEnvCfg):
     commands: Commands = field(default_factory=Commands)
     control_config: ControlConfig = field(default_factory=ControlConfig)
 
+
+@registry.envcfg("vbot_navigation_section011_curriculum")
+@dataclass
+class VBotSection011CurriculumEnvCfg(VBotSection011EnvCfg):
+    """Section 1 skill curriculum; evaluation still uses the official start."""
+
+    curriculum_spawn_probabilities: tuple[float, ...] = (0.35, 0.35, 0.20, 0.10)
+    curriculum_hfield_y_range: tuple[float, float] = (-1.35, 1.25)
+    curriculum_ramp_y_range: tuple[float, float] = (2.1, 5.8)
+    curriculum_platform_y_range: tuple[float, float] = (7.0, 8.3)
+
 @registry.envcfg("vbot_navigation_section012")
 #通过 @registry.envcfg("vbot_navigation_section012") 注册
 @dataclass
