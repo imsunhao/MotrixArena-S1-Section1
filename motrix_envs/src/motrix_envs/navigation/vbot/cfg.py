@@ -347,6 +347,7 @@ class VBotSection011EnvCfg(VBotStairsEnvCfg):
     penalty_joint_velocity: float = 5e-5
     penalty_action_rate: float = 0.005
     penalty_stall: float = 0.3
+    penalty_feet_overstay: float = 0.05
     penalty_fall: float = 20.0
 
     @dataclass
@@ -386,10 +387,11 @@ class VBotSection011EnvCfg(VBotStairsEnvCfg):
 class VBotSection011CurriculumEnvCfg(VBotSection011EnvCfg):
     """Section 1 skill curriculum; evaluation still uses the official start."""
 
-    curriculum_spawn_probabilities: tuple[float, ...] = (0.35, 0.35, 0.20, 0.10)
-    curriculum_hfield_y_range: tuple[float, float] = (-1.35, 1.25)
-    curriculum_ramp_y_range: tuple[float, float] = (2.1, 5.8)
-    curriculum_platform_y_range: tuple[float, float] = (7.0, 8.3)
+    # Keep training aligned with official evaluation. Hard starts are only at
+    # the rough-terrain entrance, never near the ramp exit or final platform.
+    curriculum_spawn_probabilities: tuple[float, ...] = (0.65, 0.35)
+    curriculum_hfield_y_range: tuple[float, float] = (-1.45, -1.25)
+    curriculum_hfield_spawn_z: float = 0.65
 
 @registry.envcfg("vbot_navigation_section012")
 #通过 @registry.envcfg("vbot_navigation_section012") 注册

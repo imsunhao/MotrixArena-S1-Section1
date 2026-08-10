@@ -473,6 +473,9 @@ class VBotSection011Env(NpEnv):
         state.info["feet_air_time"] = np.where(
             foot_contacts, 0.0, feet_air_time
         ).astype(np.float32)
+        state.info["feet_contact_time"] = np.where(
+            foot_contacts, state.info["feet_contact_time"] + cfg.ctrl_dt, 0.0
+        ).astype(np.float32)
         state.info["contacts"] = foot_contacts
         self._update_success_state(
             root_pos, base_lin_vel, gyro, projected_gravity, state.info
@@ -683,6 +686,10 @@ class VBotSection011Env(NpEnv):
             ),
             axis=1,
         )
+        feet_overstay_cost = np.sum(
+            np.clip((info["feet_contact_time"] - 0.4) / 0.4, 0.0, 1.0),
+            axis=1,
+        ) * ~info["on_platform"]
         commanded_speed = np.linalg.norm(velocity_commands[:, :2], axis=1)
         planar_speed = np.linalg.norm(base_lin_vel[:, :2], axis=1)
         stalled = np.logical_and.reduce(
@@ -716,6 +723,7 @@ class VBotSection011Env(NpEnv):
             - cfg.penalty_joint_velocity * joint_velocity_cost
             - cfg.penalty_action_rate * action_rate_cost
             - cfg.penalty_stall * stalled
+            - cfg.penalty_feet_overstay * feet_overstay_cost
             - cfg.penalty_fall * base_contact
         )
         return reward.astype(np.float32)
@@ -744,23 +752,7 @@ class VBotSection011Env(NpEnv):
         spawn_y[hfield] = np.random.uniform(
             *self._cfg.curriculum_hfield_y_range, size=int(np.sum(hfield))
         )
-        # The heightfield peaks at 0.277 m; start above it and let the robot settle.
-        spawn_z[hfield] = 0.85
-
-        ramp = segment == 2
-        spawn_y[ramp] = np.random.uniform(
-            *self._cfg.curriculum_ramp_y_range, size=int(np.sum(ramp))
-        )
-        # Collision ramp rises approximately 15 degrees from y=2.0.
-        ramp_surface = np.tan(np.deg2rad(15.0)) * (spawn_y[ramp] - 2.0)
-        spawn_z[ramp] = ramp_surface + self.spawn_height
-
-        platform = segment == 3
-        spawn_y[platform] = np.random.uniform(
-            *self._cfg.curriculum_platform_y_range, size=int(np.sum(platform))
-        )
-        # Platform top is about z=1.294 m.
-        spawn_z[platform] = 1.294 + self.spawn_height
+        spawn_z[hfield] = self._cfg.curriculum_hfield_spawn_z
 
         return np.column_stack((spawn_x, spawn_y)), spawn_z
 
@@ -950,6 +942,9 @@ class VBotSection011Env(NpEnv):
                 (num_envs, self.num_foot_check), dtype=np.float32
             ),
             "feet_air_time_at_contact": np.zeros(
+                (num_envs, self.num_foot_check), dtype=np.float32
+            ),
+            "feet_contact_time": np.zeros(
                 (num_envs, self.num_foot_check), dtype=np.float32
             ),
             # 新增：与locomotion一致的字段
