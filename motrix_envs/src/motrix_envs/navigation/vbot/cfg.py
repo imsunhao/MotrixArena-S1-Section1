@@ -485,7 +485,9 @@ class VBotSection011Go1TransferMediumCorridorEnvCfg(
     """Route through the smoother x=0.70 heightfield corridor."""
 
     terrain_corridor_x: float = 0.70
-    terrain_entry_y: float = -1.45
+    # Switch to the far corridor target before the hfield edge so the policy
+    # does not decelerate at a near target exactly where momentum is needed.
+    terrain_entry_y: float = -1.80
     terrain_exit_y: float = 1.70
 
 
@@ -497,7 +499,7 @@ class VBotSection011Go1TransferFastCorridorEnvCfg(
     """Aggressive control routed through the x=0.70 heightfield corridor."""
 
     terrain_corridor_x: float = 0.70
-    terrain_entry_y: float = -1.45
+    terrain_entry_y: float = -1.80
     terrain_exit_y: float = 1.70
 
 
@@ -576,7 +578,7 @@ class VBotSection011Go1TransferFastCorridorSkillEnvCfg(
     """Focused terrain skill routed through the smooth x=0.70 corridor."""
 
     terrain_corridor_x: float = 0.70
-    terrain_entry_y: float = -1.45
+    terrain_entry_y: float = -1.80
     terrain_exit_y: float = 1.70
 
 @registry.envcfg("vbot_navigation_section012")
