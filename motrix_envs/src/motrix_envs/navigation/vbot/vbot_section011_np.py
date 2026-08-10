@@ -65,6 +65,7 @@ def generate_repeating_array(num_period, num_reset, period_counter):
 @registry.env("vbot_navigation_section011_rough_skill_v7_corridor_scale070", "np")
 @registry.env("vbot_navigation_section011_rough_skill_v7_corridor_scale080", "np")
 @registry.env("vbot_navigation_section011_rough_skill_v7_corridor_scale090", "np")
+@registry.env("vbot_locomotion_section011_rough_corridor", "np")
 @registry.env("vbot_navigation_section011_go1_transfer_fast_corridor_skill", "np")
 @registry.env("vbot_navigation_section011", "np")
 class VBotSection011Env(NpEnv):
@@ -96,8 +97,14 @@ class VBotSection011Env(NpEnv):
         # 动作和观测空间
         self._action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(12,), dtype=np.float32)
         # 54 task/proprioceptive features + 8 real terrain-height samples.
+        observation_size = (
+            48 if getattr(cfg, "locomotion_observations_only", False) else 62
+        )
         self._observation_space = gym.spaces.Box(
-            low=-np.inf, high=np.inf, shape=(62,), dtype=np.float32
+            low=-np.inf,
+            high=np.inf,
+            shape=(observation_size,),
+            dtype=np.float32,
         )
         
         self._num_dof_pos = self._model.num_dof_pos
@@ -770,6 +777,8 @@ class VBotSection011Env(NpEnv):
             axis=-1,
         )
         assert obs.shape == (data.shape[0], 62)
+        if getattr(cfg, "locomotion_observations_only", False):
+            obs = obs[:, :48]
         
         # 计算奖励
         state.info["navigation_target"] = navigation_target.astype(np.float32)
@@ -1282,6 +1291,8 @@ class VBotSection011Env(NpEnv):
             axis=-1,
         )
         assert obs.shape == (num_envs, 62)
+        if getattr(self._cfg, "locomotion_observations_only", False):
+            obs = obs[:, :48]
         
         info = {
             "pose_commands": pose_commands,

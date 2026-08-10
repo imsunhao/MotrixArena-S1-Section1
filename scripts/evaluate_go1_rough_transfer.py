@@ -40,6 +40,11 @@ _MAX_CONTROL_STEPS = flags.DEFINE_integer(
 )
 _SEED = flags.DEFINE_integer("seed", 2026, "Evaluation random seed")
 _SIM_BACKEND = flags.DEFINE_string("sim-backend", None, "Simulation backend")
+_FORCE_ROUGH = flags.DEFINE_bool(
+    "force-rough",
+    False,
+    "Start evaluation directly on rough terrain instead of using the flat curriculum gate",
+)
 
 
 def main(argv):
@@ -68,6 +73,8 @@ def main(argv):
     agent.load(_POLICY.value)
     agent.set_running_mode("eval")
 
+    if _FORCE_ROUGH.value:
+        raw_env.training_level = 1
     obs, _ = env.reset()
     episode_steps = np.zeros(_NUM_ENVS.value, dtype=np.int64)
     episode_is_rough = np.zeros(_NUM_ENVS.value, dtype=bool)
@@ -131,6 +138,7 @@ def main(argv):
     rough_denominator = max(rough_completed, 1)
     metrics = {
         "policy": _POLICY.value,
+        "force_rough": _FORCE_ROUGH.value,
         "seed": _SEED.value,
         "num_envs": _NUM_ENVS.value,
         "control_steps": control_steps,

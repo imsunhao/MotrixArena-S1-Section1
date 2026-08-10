@@ -383,6 +383,7 @@ class navigation:
     @rlcfg("vbot_navigation_section011_no_overstay")
     @rlcfg("vbot_navigation_section011_low_action")
     @rlcfg("vbot_navigation_section011_safe_progress")
+    @rlcfg("vbot_locomotion_section011_rough_corridor")
     @rlcfg("vbot_navigation_section011")
     @rlcfg("vbot_navigation_section01")
     @dataclass

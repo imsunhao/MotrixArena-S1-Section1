@@ -854,6 +854,48 @@ class VBotSection011RoughSkillV7CorridorScale090EnvCfg(
     control_config: ControlConfig = field(default_factory=ControlConfig)
 
 
+@registry.envcfg("vbot_locomotion_section011_rough_corridor")
+@dataclass
+class VBotSection011RoughCorridorLocomotionEnvCfg(
+    VBotSection011RoughSkillV7CorridorScale060EnvCfg
+):
+    """Train a VBot gait directly on the measured low-roughness corridor.
+
+    The policy sees only the shared 48-dimensional proprioception/command
+    prefix. Navigation and terrain task features are deliberately withheld so
+    the resulting gait can be transferred into the full 62-dimensional task
+    without coupling locomotion to one waypoint layout.
+    """
+
+    locomotion_observations_only: bool = True
+    action_filter_alpha: float = 1.0
+    navigation_speed_limit: float = 0.5
+    max_episode_seconds: float = 10.0
+    max_episode_steps: int = 1000
+
+    # Dense locomotion objectives only. Route commands still point through the
+    # corridor, but no sparse gate reward can dominate balance learning.
+    reward_tracking_linear: float = 2.0
+    reward_tracking_yaw: float = 0.5
+    reward_target_direction_velocity: float = 1.0
+    reward_progress: float = 0.0
+    reward_waypoint: float = 0.0
+    reward_skill_goal: float = 0.0
+    skill_goal_y: float | None = None
+    skill_goal_waypoint_idx: int | None = None
+    terminate_on_skill_goal: bool = False
+    penalty_fall: float = 100.0
+    clip_reward_nonnegative: bool = True
+
+    @dataclass
+    class ControlConfig(VBotSection011Go1TransferEnvCfg.ControlConfig):
+        action_scale = 0.20
+        stiffness = 80.0
+        damping = 6.0
+
+    control_config: ControlConfig = field(default_factory=ControlConfig)
+
+
 @registry.envcfg("vbot_navigation_section011_go1_transfer_fast_corridor_skill")
 @dataclass
 class VBotSection011Go1TransferFastCorridorSkillEnvCfg(
