@@ -668,6 +668,51 @@ class VBotSection011RoughSkillV4SafeEnvCfg(VBotSection011RoughSkillV4EnvCfg):
     control_config: ControlConfig = field(default_factory=ControlConfig)
 
 
+@registry.envcfg("vbot_navigation_section011_rough_skill_v5_stage1")
+@dataclass
+class VBotSection011RoughSkillV5Stage1EnvCfg(
+    VBotSection011RoughSkillV4EnvCfg
+):
+    """First rough-terrain curriculum stage: reach the near-side gate.
+
+    V4 asked a transferred flat-ground gait to traverse the complete
+    heightfield before receiving its sparse success reward. This stage moves
+    that terminal reward to the first learnable subgoal (``y=-0.6``), while
+    retaining dense goal-direction velocity and local progress shaping.
+    Successful checkpoints can then warm-start the longer V4 objective.
+    """
+
+    route_waypoint_targets: tuple[tuple[float, float], ...] = (
+        (0.0, -0.6),
+        (0.0, -0.4),
+        (0.0, 1.2),
+        (0.0, 2.25),
+        (0.0, 4.0),
+        (0.0, 6.0),
+        (0.0, 7.8),
+    )
+    reward_target_direction_velocity: float = 4.0
+    reward_progress: float = 10.0
+    reward_skill_goal: float = 300.0
+    skill_goal_waypoint_idx: int = 2
+
+
+@registry.envcfg("vbot_navigation_section011_rough_skill_v5_stage1_safe")
+@dataclass
+class VBotSection011RoughSkillV5Stage1SafeEnvCfg(
+    VBotSection011RoughSkillV5Stage1EnvCfg
+):
+    """Stability-first control amplitude for the first curriculum stage."""
+
+    navigation_speed_limit: float = 0.7
+
+    @dataclass
+    class ControlConfig(VBotSection011Go1TransferEnvCfg.ControlConfig):
+        action_scale = 0.05
+
+    control_config: ControlConfig = field(default_factory=ControlConfig)
+
+
 @registry.envcfg("vbot_navigation_section011_go1_transfer_fast_corridor_skill")
 @dataclass
 class VBotSection011Go1TransferFastCorridorSkillEnvCfg(
