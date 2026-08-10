@@ -346,6 +346,7 @@ class VBotSection011EnvCfg(VBotStairsEnvCfg):
     skill_goal_waypoint_idx: int | None = None
     terminate_on_skill_goal: bool = False
     navigation_speed_limit: float = 1.0
+    clip_reward_nonnegative: bool = False
     reward_progress: float = 20.0
     reward_waypoint: float = 10.0
     reward_first_platform: float = 25.0
@@ -650,6 +651,7 @@ class VBotSection011RoughSkillV4EnvCfg(
     reward_skill_goal: float = 200.0
     skill_goal_waypoint_idx: int = 3
     terminate_on_skill_goal: bool = True
+    clip_reward_nonnegative: bool = True
 
 
 @registry.envcfg("vbot_navigation_section011_rough_skill_v4_safe")

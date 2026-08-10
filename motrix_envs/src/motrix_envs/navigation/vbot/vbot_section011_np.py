@@ -1036,6 +1036,8 @@ class VBotSection011Env(NpEnv):
             - cfg.penalty_feet_overstay * feet_overstay_cost
             - cfg.penalty_fall * base_contact
         )
+        if getattr(cfg, "clip_reward_nonnegative", False):
+            reward = np.maximum(reward, 0.0)
         return reward.astype(np.float32)
 
     def _sample_spawn_points(self, num_envs: int) -> tuple[np.ndarray, np.ndarray]:
