@@ -963,6 +963,16 @@ class VBotSection011RoughEntryStage0EnvCfg(
     skill_goal_y: float | None = -1.4
 
 
+@registry.envcfg("vbot_locomotion_section011_rough_entry_near_edge")
+@dataclass
+class VBotSection011RoughEntryNearEdgeEnvCfg(
+    VBotSection011RoughEntryStage0EnvCfg
+):
+    """Bootstrap the first 4--7 cm height change from adjacent flat ground."""
+
+    spawn_y_range: tuple[float, float] = (-1.65, -1.55)
+
+
 @registry.envcfg("vbot_locomotion_section011_rough_corridor_stage125")
 @dataclass
 class VBotSection011RoughCorridorStage125EnvCfg(

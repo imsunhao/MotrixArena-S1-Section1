@@ -70,6 +70,7 @@ def generate_repeating_array(num_period, num_reset, period_counter):
 @registry.env("vbot_locomotion_section011_rough_corridor_contact", "np")
 @registry.env("vbot_locomotion_section011_rough_entry", "np")
 @registry.env("vbot_locomotion_section011_rough_entry_stage0", "np")
+@registry.env("vbot_locomotion_section011_rough_entry_near_edge", "np")
 @registry.env("vbot_locomotion_section011_rough_corridor_stage125", "np")
 @registry.env("vbot_locomotion_section011_rough_corridor_stage15", "np")
 @registry.env("vbot_locomotion_section011_rough_corridor_stage2", "np")
