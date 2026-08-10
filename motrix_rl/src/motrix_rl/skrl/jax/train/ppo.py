@@ -164,7 +164,11 @@ class Trainer:
         self._sim_backend = sim_backend
         self._enable_render = enable_render
 
-    def train(self, initial_policy: str = None) -> None:
+    def train(
+        self,
+        initial_policy: str = None,
+        policy_log_std_override: float = None,
+    ) -> None:
         """
         Start training the agent.
         """
@@ -178,6 +182,15 @@ class Trainer:
         agent = self._make_agent(models, skrl_env, ppo_cfg)
         if initial_policy:
             agent.load(initial_policy)
+            if policy_log_std_override is not None:
+                policy = agent.models["policy"]
+                params = policy.state_dict.params.copy()
+                policy_params = params["params"].copy()
+                policy_params["log_std"] = jnp.full_like(
+                    policy_params["log_std"], policy_log_std_override
+                )
+                params["params"] = policy_params
+                policy.state_dict = policy.state_dict.replace(params=params)
         cfg_trainer = {
             "timesteps": rlcfg.max_batch_env_steps,
             "headless": not self._enable_render,

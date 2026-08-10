@@ -45,6 +45,11 @@ _LEARNING_EPOCHS = flags.DEFINE_integer(
 _RATIO_CLIP = flags.DEFINE_float(
     "ratio-clip", None, "Override the PPO policy ratio clipping range"
 )
+_RESUME_LOG_STD = flags.DEFINE_float(
+    "resume-log-std",
+    None,
+    "JAX only: replace policy log standard deviation after loading a checkpoint",
+)
 _RENDER = flags.DEFINE_bool("render", False, "Render the env")
 _TRAIN_BACKEND = flags.DEFINE_string("train-backend", "jax", "The learning backend. (jax/torch)")
 _SEED = flags.DEFINE_integer("seed", None, "Random seed for reproducibility")
@@ -93,6 +98,9 @@ def main(argv):
             raise app.UsageError("--ratio-clip must be in (0, 1]")
         rl_override["ratio_clip"] = _RATIO_CLIP.value
 
+    if _RESUME_LOG_STD.present and not _INITIAL_POLICY.value:
+        raise app.UsageError("--resume-log-std requires --initial-policy")
+
     if _RAND_SEED.value:
         rl_override["seed"] = None
     elif _SEED.present:
@@ -120,7 +128,15 @@ def main(argv):
     else:
         raise Exception(f"Unknown train backend: {train_backend}")
 
-    trainer.train(initial_policy=_INITIAL_POLICY.value)
+    if train_backend == "jax":
+        trainer.train(
+            initial_policy=_INITIAL_POLICY.value,
+            policy_log_std_override=_RESUME_LOG_STD.value,
+        )
+    else:
+        if _RESUME_LOG_STD.present:
+            raise app.UsageError("--resume-log-std currently requires --train-backend=jax")
+        trainer.train(initial_policy=_INITIAL_POLICY.value)
 
 
 if __name__ == "__main__":
