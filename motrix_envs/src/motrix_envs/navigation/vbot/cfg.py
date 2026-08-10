@@ -922,6 +922,29 @@ class VBotSection011RoughCorridorContactEnvCfg(
     locomotion_contact_force_observations: bool = True
 
 
+@registry.envcfg("vbot_locomotion_section011_full_route_contact")
+@dataclass
+class VBotSection011FullRouteContactEnvCfg(
+    VBotSection011RoughCorridorContactEnvCfg
+):
+    """Run the same contact-aware gait from the official start to the platform."""
+
+    spawn_x_range: tuple[float, float] = (-0.5, 0.5)
+    spawn_y_range: tuple[float, float] = (-2.9, -2.0)
+    curriculum_spawn_probabilities: tuple[float, ...] | None = None
+    max_episode_seconds: float = 40.0
+    max_episode_steps: int = 4000
+    route_waypoint_targets: tuple[tuple[float, float], ...] = (
+        (0.6, -1.1),
+        (0.6, -0.4),
+        (0.6, 1.2),
+        (0.6, 2.25),
+        (0.0, 4.0),
+        (0.0, 6.0),
+        (0.0, 7.8),
+    )
+
+
 @registry.envcfg("vbot_navigation_section011_go1_transfer_fast_corridor_skill")
 @dataclass
 class VBotSection011Go1TransferFastCorridorSkillEnvCfg(
