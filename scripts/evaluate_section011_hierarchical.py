@@ -45,6 +45,9 @@ _ROUGH_POLICY = flags.DEFINE_string(
 _SLOPE_POLICY = flags.DEFINE_string(
     "slope-policy", None, "Optional policy used from the slope entrance onward"
 )
+_FINAL_POLICY = flags.DEFINE_string(
+    "final-policy", None, "Optional fourth policy used after the slope-stage skill"
+)
 _ROUGH_START_Y = flags.DEFINE_float(
     "rough-start-y", -1.55, "Switch from base policy to rough policy"
 )
@@ -53,6 +56,9 @@ _ROUGH_END_Y = flags.DEFINE_float(
 )
 _SLOPE_START_Y = flags.DEFINE_float(
     "slope-start-y", 2.0, "Switch to the optional slope policy"
+)
+_FINAL_START_Y = flags.DEFINE_float(
+    "final-start-y", 4.0, "Switch to the optional fourth policy"
 )
 _BASE_ACTION_SCALE = flags.DEFINE_float(
     "base-action-scale", None, "Physical action scale expected by the base policy"
@@ -63,11 +69,17 @@ _ROUGH_ACTION_SCALE = flags.DEFINE_float(
 _SLOPE_ACTION_SCALE = flags.DEFINE_float(
     "slope-action-scale", None, "Physical action scale expected by the slope policy"
 )
+_FINAL_ACTION_SCALE = flags.DEFINE_float(
+    "final-action-scale", None, "Physical action scale expected by the fourth policy"
+)
 _ROUGH_BLEND_STEPS = flags.DEFINE_integer(
     "rough-blend-steps", 0, "Linearly blend base into rough actions over N steps"
 )
 _SLOPE_BLEND_STEPS = flags.DEFINE_integer(
     "slope-blend-steps", 0, "Linearly blend rough into slope actions over N steps"
+)
+_FINAL_BLEND_STEPS = flags.DEFINE_integer(
+    "final-blend-steps", 0, "Linearly blend slope into fourth-policy actions"
 )
 _NUM_ENVS = flags.DEFINE_integer("num-envs", 64, "Parallel environments")
 _EPISODES = flags.DEFINE_integer("episodes", 64, "Completed episode target")
@@ -100,9 +112,17 @@ def main(argv):
         raise app.UsageError("--rough-start-y must be less than --rough-end-y")
     if _SLOPE_POLICY.value and _SLOPE_START_Y.value <= _ROUGH_END_Y.value:
         raise app.UsageError("--slope-start-y must be after --rough-end-y")
+    if _FINAL_POLICY.value and not _SLOPE_POLICY.value:
+        raise app.UsageError("--final-policy requires --slope-policy")
+    if _FINAL_POLICY.value and _FINAL_START_Y.value <= _SLOPE_START_Y.value:
+        raise app.UsageError("--final-start-y must be after --slope-start-y")
     if _NUM_ENVS.value <= 0 or _EPISODES.value <= 0:
         raise app.UsageError("--num-envs and --episodes must be positive")
-    if _ROUGH_BLEND_STEPS.value < 0 or _SLOPE_BLEND_STEPS.value < 0:
+    if min(
+        _ROUGH_BLEND_STEPS.value,
+        _SLOPE_BLEND_STEPS.value,
+        _FINAL_BLEND_STEPS.value,
+    ) < 0:
         raise app.UsageError("policy blend steps must be non-negative")
 
     config.jax.backend = "jax"
@@ -132,10 +152,16 @@ def main(argv):
         if _SLOPE_ACTION_SCALE.value is not None
         else env_action_scale
     )
+    final_action_scale = (
+        _FINAL_ACTION_SCALE.value
+        if _FINAL_ACTION_SCALE.value is not None
+        else env_action_scale
+    )
     for name, value in (
         ("base-action-scale", base_action_scale),
         ("rough-action-scale", rough_action_scale),
         ("slope-action-scale", slope_action_scale),
+        ("final-action-scale", final_action_scale),
     ):
         if value <= 0:
             raise app.UsageError(f"--{name} must be positive")
@@ -149,11 +175,16 @@ def main(argv):
         if _SLOPE_POLICY.value
         else None
     )
+    final_agent = (
+        _load_agent(trainer, env, rlcfg, _FINAL_POLICY.value)
+        if _FINAL_POLICY.value
+        else None
+    )
 
     obs, _ = env.reset()
     stages = np.zeros(_NUM_ENVS.value, dtype=np.int8)
     stage_ages = np.zeros(_NUM_ENVS.value, dtype=np.int32)
-    stage_entry_counts = np.zeros(4, dtype=np.int64)
+    stage_entry_counts = np.zeros(5, dtype=np.int64)
     control_steps = 0
     reward_sum = 0.0
     transition_count = 0
@@ -179,6 +210,14 @@ def main(argv):
             stages[enter_slope] = 3
             stage_ages[enter_slope] = 0
             stage_entry_counts[3] += int(np.sum(enter_slope))
+
+        if final_agent is not None:
+            enter_final = np.logical_and(
+                stages == 3, root_y >= _FINAL_START_Y.value
+            )
+            stages[enter_final] = 4
+            stage_ages[enter_final] = 0
+            stage_entry_counts[4] += int(np.sum(enter_final))
 
         base_actions = _mean_actions(base_agent, obs) * (
             base_action_scale / env_action_scale
@@ -212,6 +251,20 @@ def main(argv):
             actions = jnp.where(
                 jnp.asarray(stages == 3)[:, None], slope_actions, actions
             )
+            if final_agent is not None:
+                final_actions = _mean_actions(final_agent, obs) * (
+                    final_action_scale / env_action_scale
+                )
+                if _FINAL_BLEND_STEPS.value:
+                    final_alpha = np.clip(
+                        (stage_ages + 1) / _FINAL_BLEND_STEPS.value, 0.0, 1.0
+                    )
+                    final_actions = slope_actions + jnp.asarray(final_alpha)[
+                        :, None
+                    ] * (final_actions - slope_actions)
+                actions = jnp.where(
+                    jnp.asarray(stages == 4)[:, None], final_actions, actions
+                )
 
         obs, rewards, _, _, _ = env.step(actions)
         reward_sum += float(np.sum(np.asarray(rewards)))
@@ -235,12 +288,15 @@ def main(argv):
             "base_policy": _BASE_POLICY.value,
             "rough_policy": _ROUGH_POLICY.value,
             "slope_policy": _SLOPE_POLICY.value,
+            "final_policy": _FINAL_POLICY.value,
             "environment_action_scale": env_action_scale,
             "base_action_scale": base_action_scale,
             "rough_action_scale": rough_action_scale,
             "slope_action_scale": slope_action_scale,
+            "final_action_scale": final_action_scale,
             "rough_blend_steps": _ROUGH_BLEND_STEPS.value,
             "slope_blend_steps": _SLOPE_BLEND_STEPS.value,
+            "final_blend_steps": _FINAL_BLEND_STEPS.value,
             "seed": _SEED.value,
             "num_envs": _NUM_ENVS.value,
             "control_steps": control_steps,
@@ -253,6 +309,7 @@ def main(argv):
             "rough_start_y": _ROUGH_START_Y.value,
             "rough_end_y": _ROUGH_END_Y.value,
             "slope_start_y": _SLOPE_START_Y.value,
+            "final_start_y": _FINAL_START_Y.value,
             "stage_entry_counts": stage_entry_counts.tolist(),
             "ongoing_mean_episode_max_y": float(np.mean(ongoing_max_y)),
             "ongoing_max_episode_y": float(np.max(ongoing_max_y)),
