@@ -126,6 +126,7 @@ class VBotSection011Env(NpEnv):
         self.fall_episodes = 0
         self.timeout_episodes = 0
         self.invalid_state_episodes = 0
+        self.episode_steps_sum = 0
         self.episode_max_y_sum = 0.0
         self.episode_forward_progress_sum = 0.0
         self.episode_max_y = float("-inf")
@@ -412,6 +413,10 @@ class VBotSection011Env(NpEnv):
             "timeout_episodes": self.timeout_episodes,
             "timeout_rate": self.timeout_episodes / denominator,
             "invalid_state_episodes": self.invalid_state_episodes,
+            "mean_episode_steps": self.episode_steps_sum / denominator,
+            "mean_episode_seconds": (
+                self.episode_steps_sum * self._cfg.ctrl_dt / denominator
+            ),
             "mean_episode_max_y": self.episode_max_y_sum / denominator,
             "max_episode_y": (
                 self.episode_max_y if total else float("nan")
@@ -690,6 +695,9 @@ class VBotSection011Env(NpEnv):
             self.timeout_episodes += int(np.sum(timeout[episode_done]))
             self.invalid_state_episodes += int(
                 np.sum(invalid_quaternion[episode_done])
+            )
+            self.episode_steps_sum += int(
+                np.sum(state.info["steps"][episode_done] + 1)
             )
 
             episode_max_y = state.info["episode_max_y"][episode_done]
