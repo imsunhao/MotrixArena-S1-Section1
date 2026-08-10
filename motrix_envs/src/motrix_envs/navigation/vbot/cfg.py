@@ -404,6 +404,14 @@ class VBotSection011CurriculumEnvCfg(VBotSection011EnvCfg):
     curriculum_hfield_y_range: tuple[float, float] = (-1.45, -1.25)
     curriculum_hfield_spawn_z: float = 0.65
 
+
+@registry.envcfg("vbot_navigation_section011_no_overstay")
+@dataclass
+class VBotSection011NoOverstayEnvCfg(VBotSection011EnvCfg):
+    """Ablation used to test whether contact-duration shaping hurts stability."""
+
+    penalty_feet_overstay: float = 0.0
+
 @registry.envcfg("vbot_navigation_section012")
 #通过 @registry.envcfg("vbot_navigation_section012") 注册
 @dataclass
