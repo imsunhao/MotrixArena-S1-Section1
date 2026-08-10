@@ -1030,6 +1030,30 @@ class VBotSection011FullRouteContactEnvCfg(
     )
 
 
+@registry.envcfg("vbot_locomotion_section011_approach_stage0")
+@dataclass
+class VBotSection011ApproachStage0EnvCfg(
+    VBotSection011FullRouteContactEnvCfg
+):
+    """Train official starts to reach the flat edge before the heightfield."""
+
+    max_episode_seconds: float = 20.0
+    max_episode_steps: int = 2000
+    skill_goal_y: float | None = -1.65
+    reward_skill_goal: float = 200.0
+    terminate_on_skill_goal: bool = True
+
+
+@registry.envcfg("vbot_locomotion_section011_approach")
+@dataclass
+class VBotSection011ApproachEnvCfg(
+    VBotSection011ApproachStage0EnvCfg
+):
+    """Advance the official-start approach curriculum to the terrain edge."""
+
+    skill_goal_y: float | None = -1.55
+
+
 @registry.envcfg("vbot_locomotion_section011_mixed_route_contact")
 @dataclass
 class VBotSection011MixedRouteContactEnvCfg(
