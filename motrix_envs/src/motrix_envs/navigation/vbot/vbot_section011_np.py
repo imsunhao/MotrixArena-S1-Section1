@@ -39,6 +39,7 @@ def generate_repeating_array(num_period, num_reset, period_counter):
 
 @registry.env("vbot_navigation_section011_curriculum", "np")
 @registry.env("vbot_navigation_section011_no_overstay", "np")
+@registry.env("vbot_navigation_section011_low_action", "np")
 @registry.env("vbot_navigation_section011", "np")
 class VBotSection011Env(NpEnv):
     """

@@ -412,6 +412,18 @@ class VBotSection011NoOverstayEnvCfg(VBotSection011EnvCfg):
 
     penalty_feet_overstay: float = 0.0
 
+
+@registry.envcfg("vbot_navigation_section011_low_action")
+@dataclass
+class VBotSection011LowActionEnvCfg(VBotSection011EnvCfg):
+    """Control-amplitude ablation for stabilizing an aggressive gait."""
+
+    @dataclass
+    class ControlConfig:
+        action_scale = 0.20
+
+    control_config: ControlConfig = field(default_factory=ControlConfig)
+
 @registry.envcfg("vbot_navigation_section012")
 #通过 @registry.envcfg("vbot_navigation_section012") 注册
 @dataclass

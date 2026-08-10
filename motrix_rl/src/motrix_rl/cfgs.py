@@ -380,6 +380,7 @@ class navigation:
 
     @rlcfg("vbot_navigation_section011_curriculum")
     @rlcfg("vbot_navigation_section011_no_overstay")
+    @rlcfg("vbot_navigation_section011_low_action")
     @rlcfg("vbot_navigation_section011")
     @rlcfg("vbot_navigation_section01")
     @dataclass
