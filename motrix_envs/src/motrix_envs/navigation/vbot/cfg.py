@@ -963,6 +963,16 @@ class VBotSection011RoughEntryStage0EnvCfg(
     skill_goal_y: float | None = -1.4
 
 
+@registry.envcfg("vbot_locomotion_section011_rough_entry_stage05")
+@dataclass
+class VBotSection011RoughEntryStage05EnvCfg(
+    VBotSection011RoughEntryStage0EnvCfg
+):
+    """Advance the entry skill across the first heightfield ripple."""
+
+    skill_goal_y: float | None = -1.35
+
+
 @registry.envcfg("vbot_locomotion_section011_rough_entry_near_edge")
 @dataclass
 class VBotSection011RoughEntryNearEdgeEnvCfg(
