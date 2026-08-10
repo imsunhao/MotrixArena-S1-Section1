@@ -419,6 +419,8 @@ class navigation:
     @rlcfg("vbot_navigation_section011_go1_transfer_curriculum")
     @rlcfg("vbot_navigation_section011_go1_transfer_fast_curriculum")
     @rlcfg("vbot_navigation_section011_go1_transfer_medium_curriculum")
+    @rlcfg("vbot_navigation_section011_go1_transfer_terrain_skill")
+    @rlcfg("vbot_navigation_section011_go1_transfer_fast_terrain_skill")
     @dataclass
     class VBotNavigationSection011Go1TransferPPOConfig(
         VBotNavigationSection01PPOConfig

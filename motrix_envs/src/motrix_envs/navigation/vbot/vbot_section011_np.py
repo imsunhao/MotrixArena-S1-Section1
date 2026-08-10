@@ -47,6 +47,8 @@ def generate_repeating_array(num_period, num_reset, period_counter):
 @registry.env("vbot_navigation_section011_go1_transfer_curriculum", "np")
 @registry.env("vbot_navigation_section011_go1_transfer_fast_curriculum", "np")
 @registry.env("vbot_navigation_section011_go1_transfer_medium_curriculum", "np")
+@registry.env("vbot_navigation_section011_go1_transfer_terrain_skill", "np")
+@registry.env("vbot_navigation_section011_go1_transfer_fast_terrain_skill", "np")
 @registry.env("vbot_navigation_section011", "np")
 class VBotSection011Env(NpEnv):
     """
@@ -232,7 +234,10 @@ class VBotSection011Env(NpEnv):
     
     def _init_foot_contact(self):
         self.foot_contact_check = np.zeros((0, 2), dtype=np.uint32)
-        self.num_foot_check = 4  
+        self._foot_geoms = [
+            self._model.get_geom(name) for name in self._cfg.asset.foot_names
+        ]
+        self.num_foot_check = len(self._foot_geoms)
     
     def get_dof_pos(self, data: mtx.SceneData):
         return self._body.get_joint_dof_pos(data)
@@ -818,6 +823,30 @@ class VBotSection011Env(NpEnv):
             np.clip((info["feet_contact_time"] - 0.4) / 0.4, 0.0, 1.0),
             axis=1,
         ) * ~info["on_platform"]
+        foot_clearance_reward = np.zeros(self._num_envs, dtype=np.float32)
+        foot_clearance_scale = float(
+            getattr(cfg, "reward_foot_clearance", 0.0)
+        )
+        if foot_clearance_scale:
+            foot_positions = np.stack(
+                [geom.get_pose(data)[:, :3] for geom in self._foot_geoms], axis=1
+            )
+            foot_terrain_height = self._sample_terrain_height(
+                foot_positions[:, :, 0], foot_positions[:, :, 1]
+            )
+            foot_clearance = foot_positions[:, :, 2] - foot_terrain_height
+            target_clearance = float(cfg.target_foot_clearance)
+            clearance_score = np.exp(
+                -np.square((foot_clearance - target_clearance) / 0.06)
+            )
+            swing_feet = ~info["contacts"]
+            zone_y_min, zone_y_max = cfg.foot_clearance_zone_y
+            in_clearance_zone = np.logical_and(
+                root_pos[:, 1] >= zone_y_min, root_pos[:, 1] <= zone_y_max
+            )
+            foot_clearance_reward = (
+                np.sum(clearance_score * swing_feet, axis=1) * in_clearance_zone
+            )
         commanded_speed = np.linalg.norm(velocity_commands[:, :2], axis=1)
         planar_speed = np.linalg.norm(base_lin_vel[:, :2], axis=1)
         stalled = np.logical_and.reduce(
@@ -844,6 +873,7 @@ class VBotSection011Env(NpEnv):
             + cfg.reward_stable_step * info["stable_candidate"]
             + cfg.reward_stable_success * info["stable_success_this_step"]
             + cfg.reward_feet_air_time * feet_air_reward
+            + foot_clearance_scale * foot_clearance_reward
             - cfg.penalty_orientation * orientation_cost
             - cfg.penalty_vertical_velocity * vertical_velocity_cost
             - cfg.penalty_base_height * base_height_cost

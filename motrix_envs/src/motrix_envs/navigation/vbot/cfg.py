@@ -516,6 +516,33 @@ class VBotSection011Go1TransferMediumCurriculumEnvCfg(
 
     control_config: ControlConfig = field(default_factory=ControlConfig)
 
+
+@registry.envcfg("vbot_navigation_section011_go1_transfer_terrain_skill")
+@dataclass
+class VBotSection011Go1TransferTerrainSkillEnvCfg(
+    VBotSection011Go1TransferMediumCurriculumEnvCfg
+):
+    """Focused rough-terrain stepping skill with explicit swing-foot clearance."""
+
+    curriculum_spawn_probabilities: tuple[float, ...] = (0.2, 0.8)
+    reward_foot_clearance: float = 0.5
+    target_foot_clearance: float = 0.18
+    foot_clearance_zone_y: tuple[float, float] = (-1.6, 1.8)
+
+
+@registry.envcfg("vbot_navigation_section011_go1_transfer_fast_terrain_skill")
+@dataclass
+class VBotSection011Go1TransferFastTerrainSkillEnvCfg(
+    VBotSection011Go1TransferTerrainSkillEnvCfg
+):
+    """Focused rough-terrain skill using the aggressive 0.06 action scale."""
+
+    @dataclass
+    class ControlConfig(VBotSection011Go1TransferEnvCfg.ControlConfig):
+        action_scale = 0.06
+
+    control_config: ControlConfig = field(default_factory=ControlConfig)
+
 @registry.envcfg("vbot_navigation_section012")
 #通过 @registry.envcfg("vbot_navigation_section012") 注册
 @dataclass
