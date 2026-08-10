@@ -604,7 +604,10 @@ class VBotSection011Go1TransferFastTerrainSkillV3EnvCfg(
         (0.0, 6.9),
         (0.0, 7.8),
     )
-    observe_route_target: bool = True
+    # Preserve the task-observation values learned by seed 73. The route still
+    # drives commands and rewards; later experiments can expose it after the
+    # locomotion policy has adapted without sacrificing the rare crossing.
+    observe_route_target: bool = False
     progress_uses_route_target: bool = True
     reward_target_direction_velocity: float = 1.0
 
