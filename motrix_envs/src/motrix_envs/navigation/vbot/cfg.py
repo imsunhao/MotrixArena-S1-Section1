@@ -953,6 +953,16 @@ class VBotSection011RoughEntryEnvCfg(
     terminate_on_skill_goal: bool = True
 
 
+@registry.envcfg("vbot_locomotion_section011_rough_entry_stage0")
+@dataclass
+class VBotSection011RoughEntryStage0EnvCfg(
+    VBotSection011RoughEntryEnvCfg
+):
+    """First entry curriculum gate at the near edge of the heightfield."""
+
+    skill_goal_y: float | None = -1.4
+
+
 @registry.envcfg("vbot_locomotion_section011_rough_corridor_stage125")
 @dataclass
 class VBotSection011RoughCorridorStage125EnvCfg(
