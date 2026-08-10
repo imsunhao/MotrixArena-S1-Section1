@@ -911,6 +911,17 @@ class VBotSection011RoughCorridorGoalVelocityEnvCfg(
     penalty_stall: float = 1.0
 
 
+@registry.envcfg("vbot_locomotion_section011_rough_corridor_contact")
+@dataclass
+class VBotSection011RoughCorridorContactEnvCfg(
+    VBotSection011RoughCorridorGoalVelocityEnvCfg
+):
+    """Add four robot-frame foot contact vectors to the locomotion policy."""
+
+    locomotion_observations_only: bool = False
+    locomotion_contact_force_observations: bool = True
+
+
 @registry.envcfg("vbot_navigation_section011_go1_transfer_fast_corridor_skill")
 @dataclass
 class VBotSection011Go1TransferFastCorridorSkillEnvCfg(

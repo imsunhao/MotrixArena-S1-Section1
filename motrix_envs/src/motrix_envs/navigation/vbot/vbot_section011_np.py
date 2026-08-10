@@ -67,6 +67,7 @@ def generate_repeating_array(num_period, num_reset, period_counter):
 @registry.env("vbot_navigation_section011_rough_skill_v7_corridor_scale090", "np")
 @registry.env("vbot_locomotion_section011_rough_corridor", "np")
 @registry.env("vbot_locomotion_section011_rough_corridor_goal_velocity", "np")
+@registry.env("vbot_locomotion_section011_rough_corridor_contact", "np")
 @registry.env("vbot_navigation_section011_go1_transfer_fast_corridor_skill", "np")
 @registry.env("vbot_navigation_section011", "np")
 class VBotSection011Env(NpEnv):
@@ -98,9 +99,12 @@ class VBotSection011Env(NpEnv):
         # 动作和观测空间
         self._action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(12,), dtype=np.float32)
         # 54 task/proprioceptive features + 8 real terrain-height samples.
-        observation_size = (
-            48 if getattr(cfg, "locomotion_observations_only", False) else 62
-        )
+        if getattr(cfg, "locomotion_contact_force_observations", False):
+            observation_size = 60
+        elif getattr(cfg, "locomotion_observations_only", False):
+            observation_size = 48
+        else:
+            observation_size = 62
         self._observation_space = gym.spaces.Box(
             low=-np.inf,
             high=np.inf,
@@ -353,6 +357,23 @@ class VBotSection011Env(NpEnv):
         gravity_vec = np.array([0.0, 0.0, -1.0], dtype=np.float32)
         gravity_vec = np.tile(gravity_vec, (root_quat.shape[0], 1))
         return Quaternion.rotate_inverse(root_quat, gravity_vec)
+
+    def _get_foot_contact_force_observations(
+        self, data: mtx.SceneData, root_quat: np.ndarray
+    ) -> np.ndarray:
+        """Return four 3-D contact sensor vectors in the robot frame."""
+        local_forces = []
+        for sensor_name in self._cfg.sensor.feet:
+            force = np.asarray(
+                self._model.get_sensor_value(sensor_name, data), dtype=np.float32
+            ).reshape(data.shape[0], -1)
+            force_xyz = np.zeros((data.shape[0], 3), dtype=np.float32)
+            width = min(force.shape[1], 3)
+            force_xyz[:, :width] = force[:, :width]
+            local_forces.append(Quaternion.rotate_inverse(root_quat, force_xyz))
+        contact_observations = np.concatenate(local_forces, axis=1)
+        assert contact_observations.shape == (data.shape[0], 12)
+        return contact_observations.astype(np.float32)
     
     def _get_heading_from_quat(self, quat: np.ndarray) -> np.ndarray:
         """从四元数计算yaw角（朝向）"""
@@ -778,7 +799,12 @@ class VBotSection011Env(NpEnv):
             axis=-1,
         )
         assert obs.shape == (data.shape[0], 62)
-        if getattr(cfg, "locomotion_observations_only", False):
+        if getattr(cfg, "locomotion_contact_force_observations", False):
+            obs = np.concatenate(
+                [obs[:, :48], self._get_foot_contact_force_observations(data, root_quat)],
+                axis=1,
+            )
+        elif getattr(cfg, "locomotion_observations_only", False):
             obs = obs[:, :48]
         
         # 计算奖励
@@ -1292,7 +1318,12 @@ class VBotSection011Env(NpEnv):
             axis=-1,
         )
         assert obs.shape == (num_envs, 62)
-        if getattr(self._cfg, "locomotion_observations_only", False):
+        if getattr(self._cfg, "locomotion_contact_force_observations", False):
+            obs = np.concatenate(
+                [obs[:, :48], self._get_foot_contact_force_observations(data, root_quat)],
+                axis=1,
+            )
+        elif getattr(self._cfg, "locomotion_observations_only", False):
             obs = obs[:, :48]
         
         info = {
