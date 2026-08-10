@@ -324,6 +324,23 @@ class VBotSection011EnvCfg(VBotStairsEnvCfg):
     stable_hold_seconds: float = 1.0
     reach_threshold: float = 0.45
 
+    # 第一版稠密奖励：路段门负责长程探索，速度/进展负责局部学习。
+    waypoint_y: tuple[float, ...] = (-0.6, 1.2, 2.25, 4.0, 6.0, 6.9)
+    reward_tracking_linear: float = 1.5
+    reward_tracking_yaw: float = 0.3
+    reward_progress: float = 5.0
+    reward_waypoint: float = 8.0
+    reward_first_platform: float = 25.0
+    reward_stable_step: float = 0.5
+    reward_stable_success: float = 300.0
+    penalty_orientation: float = 0.5
+    penalty_vertical_velocity: float = 2.0
+    penalty_angular_xy: float = 0.05
+    penalty_torque: float = 1e-5
+    penalty_joint_velocity: float = 5e-5
+    penalty_action_rate: float = 0.01
+    penalty_fall: float = 20.0
+
     @dataclass
     class InitState:
         # 起跑平地表面 z=0，VBot 基座初始高度约 0.5m。
@@ -444,4 +461,3 @@ class VBotSection013EnvCfg(VBotStairsEnvCfg):
     init_state: InitState = field(default_factory=InitState)
     commands: Commands = field(default_factory=Commands)
     control_config: ControlConfig = field(default_factory=ControlConfig)
-

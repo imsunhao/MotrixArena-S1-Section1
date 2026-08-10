@@ -108,6 +108,8 @@ class VBotSection011Env(NpEnv):
         self.completed_episodes = 0
         self.ever_on_platform_episodes = 0
         self.stable_success_episodes = 0
+
+        self.waypoint_y = np.asarray(cfg.waypoint_y, dtype=np.float32)
     
         # 导航统计计数器
         self.navigation_stats_step = 0
@@ -294,6 +296,7 @@ class VBotSection011Env(NpEnv):
             )
         )
         info["on_platform"] = on_platform
+        info["first_on_platform"] = np.logical_and(on_platform, ~info["ever_on_platform"])
         info["ever_on_platform"] = np.logical_or(info["ever_on_platform"], on_platform)
 
         linear_speed = np.linalg.norm(base_lin_vel[:, :2], axis=1)
@@ -311,9 +314,11 @@ class VBotSection011Env(NpEnv):
         hold_steps = np.where(stable_candidate, info["stable_hold_steps"] + 1, 0)
         info["stable_hold_steps"] = hold_steps.astype(np.int32)
         info["stable_candidate"] = stable_candidate
-        info["stable_success"] = np.logical_or(
-            info["stable_success"], hold_steps >= self.stable_hold_steps_required
+        stable_now = hold_steps >= self.stable_hold_steps_required
+        info["stable_success_this_step"] = np.logical_and(
+            stable_now, ~info["stable_success"]
         )
+        info["stable_success"] = np.logical_or(info["stable_success"], stable_now)
 
     def get_success_metrics(self) -> dict[str, float | int]:
         """返回跨自动 reset 累积的回合成功率。"""
@@ -566,15 +571,68 @@ class VBotSection011Env(NpEnv):
         return state.replace(terminated=terminated)
     
     def _compute_reward(self, data: mtx.SceneData, info: dict, velocity_commands: np.ndarray) -> np.ndarray:
-        """
-        导航任务奖励计算
-        """
+        """Section 1 第一版稠密奖励。"""
         cfg = self._cfg
-        
-        # 计算总奖励
-        reward = np.array([0])
-        
-        return reward
+        root_pos, root_quat, root_vel = self._extract_root_state(data)
+        base_lin_vel = root_vel[:, :3]
+        gyro = self._model.get_sensor_value(cfg.sensor.base_gyro, data)
+
+        lin_error = np.sum(
+            np.square(velocity_commands[:, :2] - base_lin_vel[:, :2]), axis=1
+        )
+        yaw_error = np.square(velocity_commands[:, 2] - gyro[:, 2])
+        tracking_linear = np.exp(-lin_error / 0.25)
+        tracking_yaw = np.exp(-yaw_error / 0.25)
+
+        target_xy = info["pose_commands"][:, :2]
+        distance = np.linalg.norm(target_xy - root_pos[:, :2], axis=1)
+        progress = np.clip(info["previous_distance"] - distance, -0.2, 0.2)
+        info["previous_distance"] = distance.astype(np.float32)
+
+        waypoint_idx = info["next_waypoint_idx"]
+        has_waypoint = waypoint_idx < len(self.waypoint_y)
+        safe_idx = np.minimum(waypoint_idx, len(self.waypoint_y) - 1)
+        reached_waypoint = np.logical_and(
+            has_waypoint, root_pos[:, 1] >= self.waypoint_y[safe_idx]
+        )
+        info["waypoint_reached_this_step"] = reached_waypoint
+        info["next_waypoint_idx"] = np.minimum(
+            waypoint_idx + reached_waypoint.astype(np.int32), len(self.waypoint_y)
+        )
+
+        projected_gravity = self._compute_projected_gravity(root_quat)
+        orientation_cost = np.sum(np.square(projected_gravity[:, :2]), axis=1)
+        vertical_velocity_cost = np.square(base_lin_vel[:, 2])
+        angular_xy_cost = np.sum(np.square(gyro[:, :2]), axis=1)
+        torque_cost = np.sum(np.square(data.actuator_ctrls), axis=1)
+        joint_velocity_cost = np.sum(np.square(self.get_dof_vel(data)), axis=1)
+        action_rate_cost = np.sum(
+            np.square(info["current_actions"] - info["last_actions"]), axis=1
+        )
+
+        try:
+            base_contact = self._model.get_sensor_value("base_contact", data)
+            base_contact = np.asarray(base_contact).reshape(self._num_envs, -1).max(axis=1) > 0.01
+        except Exception:
+            base_contact = np.zeros(self._num_envs, dtype=bool)
+
+        reward = (
+            cfg.reward_tracking_linear * tracking_linear
+            + cfg.reward_tracking_yaw * tracking_yaw
+            + cfg.reward_progress * progress
+            + cfg.reward_waypoint * reached_waypoint
+            + cfg.reward_first_platform * info["first_on_platform"]
+            + cfg.reward_stable_step * info["stable_candidate"]
+            + cfg.reward_stable_success * info["stable_success_this_step"]
+            - cfg.penalty_orientation * orientation_cost
+            - cfg.penalty_vertical_velocity * vertical_velocity_cost
+            - cfg.penalty_angular_xy * angular_xy_cost
+            - cfg.penalty_torque * torque_cost
+            - cfg.penalty_joint_velocity * joint_velocity_cost
+            - cfg.penalty_action_rate * action_rate_cost
+            - cfg.penalty_fall * base_contact
+        )
+        return reward.astype(np.float32)
 
     def reset(self, data: mtx.SceneData, done: np.ndarray = None) -> tuple[np.ndarray, dict]:
         num_envs = data.shape[0]
@@ -749,11 +807,16 @@ class VBotSection011Env(NpEnv):
             "filtered_actions": np.zeros((num_envs, self._num_action), dtype=np.float32),
             "ever_reached": np.zeros(num_envs, dtype=bool),
             "min_distance": distance_to_target.copy(),  # 统一使用min_distance机制
+            "previous_distance": distance_to_target.astype(np.float32),
+            "next_waypoint_idx": np.zeros(num_envs, dtype=np.int32),
+            "waypoint_reached_this_step": np.zeros(num_envs, dtype=bool),
             "on_platform": np.zeros(num_envs, dtype=bool),
+            "first_on_platform": np.zeros(num_envs, dtype=bool),
             "ever_on_platform": np.zeros(num_envs, dtype=bool),
             "stable_candidate": np.zeros(num_envs, dtype=bool),
             "stable_hold_steps": np.zeros(num_envs, dtype=np.int32),
             "stable_success": np.zeros(num_envs, dtype=bool),
+            "stable_success_this_step": np.zeros(num_envs, dtype=bool),
             # 新增：与locomotion一致的字段
             "last_dof_vel": np.zeros((num_envs, self._num_action), dtype=np.float32),  # 上一步关节速度
             "contacts": np.zeros((num_envs, self.num_foot_check), dtype=np.bool_),  # 足部接触状态
