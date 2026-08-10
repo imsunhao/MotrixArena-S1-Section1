@@ -184,6 +184,7 @@ class basic:
 
 
 class locomotion:
+    @rlcfg("go1-rough-terrain-walk-transfer")
     @rlcfg("go1-flat-terrain-walk")
     @dataclass
     class Go1WalkPPO(PPOCfg):

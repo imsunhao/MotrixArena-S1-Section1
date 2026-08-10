@@ -25,6 +25,7 @@ from motrix_envs.np.env import NpEnv, NpEnvState
 from .common import generate_repeating_array
 
 
+@registry.env("go1-rough-terrain-walk-transfer", sim_backend="np")
 @registry.env("go1-rough-terrain-walk", sim_backend="np")
 class Go1WalkRoughTask(NpEnv):
     _init_dof_pos: np.ndarray

@@ -136,6 +136,7 @@ class Go1WalkNpEnvCfg(EnvCfg):
     ctrl_dt: float = 0.01
 
 
+@registry.envcfg("go1-rough-terrain-walk-transfer")
 @registry.envcfg("go1-rough-terrain-walk")
 @dataclass
 class Go1WalkNpRoughEnvCfg(Go1WalkNpEnvCfg):
