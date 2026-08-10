@@ -477,6 +477,30 @@ class VBotSection011Go1TransferMediumEnvCfg(VBotSection011Go1TransferEnvCfg):
     control_config: ControlConfig = field(default_factory=ControlConfig)
 
 
+@registry.envcfg("vbot_navigation_section011_go1_transfer_medium_corridor")
+@dataclass
+class VBotSection011Go1TransferMediumCorridorEnvCfg(
+    VBotSection011Go1TransferMediumEnvCfg
+):
+    """Route through the smoother x=0.70 heightfield corridor."""
+
+    terrain_corridor_x: float = 0.70
+    terrain_entry_y: float = -1.45
+    terrain_exit_y: float = 1.70
+
+
+@registry.envcfg("vbot_navigation_section011_go1_transfer_fast_corridor")
+@dataclass
+class VBotSection011Go1TransferFastCorridorEnvCfg(
+    VBotSection011Go1TransferFastEnvCfg
+):
+    """Aggressive control routed through the x=0.70 heightfield corridor."""
+
+    terrain_corridor_x: float = 0.70
+    terrain_entry_y: float = -1.45
+    terrain_exit_y: float = 1.70
+
+
 @registry.envcfg("vbot_navigation_section011_go1_transfer_curriculum")
 @dataclass
 class VBotSection011Go1TransferCurriculumEnvCfg(
@@ -542,6 +566,18 @@ class VBotSection011Go1TransferFastTerrainSkillEnvCfg(
         action_scale = 0.06
 
     control_config: ControlConfig = field(default_factory=ControlConfig)
+
+
+@registry.envcfg("vbot_navigation_section011_go1_transfer_fast_corridor_skill")
+@dataclass
+class VBotSection011Go1TransferFastCorridorSkillEnvCfg(
+    VBotSection011Go1TransferFastTerrainSkillEnvCfg
+):
+    """Focused terrain skill routed through the smooth x=0.70 corridor."""
+
+    terrain_corridor_x: float = 0.70
+    terrain_entry_y: float = -1.45
+    terrain_exit_y: float = 1.70
 
 @registry.envcfg("vbot_navigation_section012")
 #通过 @registry.envcfg("vbot_navigation_section012") 注册

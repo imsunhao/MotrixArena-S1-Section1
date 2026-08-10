@@ -44,11 +44,14 @@ def generate_repeating_array(num_period, num_reset, period_counter):
 @registry.env("vbot_navigation_section011_go1_transfer", "np")
 @registry.env("vbot_navigation_section011_go1_transfer_fast", "np")
 @registry.env("vbot_navigation_section011_go1_transfer_medium", "np")
+@registry.env("vbot_navigation_section011_go1_transfer_medium_corridor", "np")
+@registry.env("vbot_navigation_section011_go1_transfer_fast_corridor", "np")
 @registry.env("vbot_navigation_section011_go1_transfer_curriculum", "np")
 @registry.env("vbot_navigation_section011_go1_transfer_fast_curriculum", "np")
 @registry.env("vbot_navigation_section011_go1_transfer_medium_curriculum", "np")
 @registry.env("vbot_navigation_section011_go1_transfer_terrain_skill", "np")
 @registry.env("vbot_navigation_section011_go1_transfer_fast_terrain_skill", "np")
+@registry.env("vbot_navigation_section011_go1_transfer_fast_corridor_skill", "np")
 @registry.env("vbot_navigation_section011", "np")
 class VBotSection011Env(NpEnv):
     """
@@ -391,6 +394,22 @@ class VBotSection011Env(NpEnv):
         ).astype(np.float32)
         return policy_lin_vel, policy_commands
 
+    def _get_navigation_target(
+        self, robot_position: np.ndarray, final_target: np.ndarray
+    ) -> np.ndarray:
+        """Select a staged target when a smoother heightfield corridor is configured."""
+        corridor_x = getattr(self._cfg, "terrain_corridor_x", None)
+        if corridor_x is None:
+            return final_target
+
+        navigation_target = final_target.copy()
+        before_exit = robot_position[:, 1] < self._cfg.terrain_exit_y
+        navigation_target[before_exit, 0] = corridor_x
+        navigation_target[before_exit, 1] = self._cfg.terrain_exit_y
+        before_entry = robot_position[:, 1] < self._cfg.terrain_entry_y
+        navigation_target[before_entry, 1] = self._cfg.terrain_entry_y
+        return navigation_target
+
     def _update_success_state(
         self,
         root_pos: np.ndarray,
@@ -607,13 +626,17 @@ class VBotSection011Env(NpEnv):
         position_threshold = 0.3
         reached_all = distance_to_target < position_threshold  # 楼梯任务：只要到达位置即可
         
-        # 计算期望速度命令（与平地navigation一致，简单P控制器）
-        desired_vel_xy = np.clip(position_error * 1.0, -1.0, 1.0)
+        # 计算期望速度命令（可先经过较平缓的高度场通道）。
+        navigation_target = self._get_navigation_target(
+            robot_position, target_position
+        )
+        navigation_error = navigation_target - robot_position
+        desired_vel_xy = np.clip(navigation_error * 1.0, -1.0, 1.0)
         desired_vel_xy = np.where(reached_all[:, np.newaxis], 0.0, desired_vel_xy)
         
         # 角速度命令：跟踪运动方向（从当前位置指向目标）
         # 与vbot_np保持一致的增益和上限，确保转向足够快
-        desired_heading = np.arctan2(position_error[:, 1], position_error[:, 0])
+        desired_heading = np.arctan2(navigation_error[:, 1], navigation_error[:, 0])
         heading_to_movement = desired_heading - robot_heading
         heading_to_movement = np.where(heading_to_movement > np.pi, heading_to_movement - 2*np.pi, heading_to_movement)
         heading_to_movement = np.where(heading_to_movement < -np.pi, heading_to_movement + 2*np.pi, heading_to_movement)
@@ -1003,8 +1026,12 @@ class VBotSection011Env(NpEnv):
         position_threshold = 0.3
         reached_all = distance_to_target < position_threshold  # 楼梯任务：只看位置
         
-        # 计算期望速度
-        desired_vel_xy = np.clip(position_error * 1.0, -1.0, 1.0)
+        # 计算期望速度，可先经过配置的较平缓高度场通道。
+        navigation_target = self._get_navigation_target(
+            robot_position, target_position
+        )
+        navigation_error = navigation_target - robot_position
+        desired_vel_xy = np.clip(navigation_error * 1.0, -1.0, 1.0)
         desired_vel_xy = np.where(reached_all[:, np.newaxis], 0.0, desired_vel_xy)
         
         base_lin_vel_xy = base_lin_vel[:, :2]
@@ -1016,7 +1043,7 @@ class VBotSection011Env(NpEnv):
         
         # ===== 与reset一致：角速度跟踪运动方向 =====
         # 计算期望的运动方向（从update_state中复制）
-        desired_heading = np.arctan2(position_error[:, 1], position_error[:, 0])
+        desired_heading = np.arctan2(navigation_error[:, 1], navigation_error[:, 0])
         heading_to_movement = desired_heading - robot_heading
         heading_to_movement = np.where(heading_to_movement > np.pi, heading_to_movement - 2*np.pi, heading_to_movement)
         heading_to_movement = np.where(heading_to_movement < -np.pi, heading_to_movement + 2*np.pi, heading_to_movement)
