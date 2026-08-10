@@ -922,6 +922,31 @@ class VBotSection011RoughCorridorContactEnvCfg(
     locomotion_contact_force_observations: bool = True
     # Metric only: crossing this gate neither terminates nor changes reward.
     skill_goal_y: float | None = -1.1
+    # Every target lies beyond the gate selected by the same index. Rough
+    # starts initialize at index 1, so target 1 must be beyond y=-0.6.
+    route_waypoint_targets: tuple[tuple[float, float], ...] = (
+        (0.6, -1.1),
+        (0.6, -0.4),
+        (0.6, 1.6),
+        (0.6, 2.7),
+        (0.0, 4.5),
+        (0.0, 6.5),
+        (0.0, 7.8),
+    )
+
+
+@registry.envcfg("vbot_locomotion_section011_rough_corridor_stage2")
+@dataclass
+class VBotSection011RoughCorridorStage2EnvCfg(
+    VBotSection011RoughCorridorContactEnvCfg
+):
+    """Second rough curriculum stage: cross the y=-0.6 gate."""
+
+    max_episode_seconds: float = 15.0
+    max_episode_steps: int = 1500
+    skill_goal_y: float | None = -0.6
+    reward_skill_goal: float = 200.0
+    terminate_on_skill_goal: bool = True
 
 
 @registry.envcfg("vbot_locomotion_section011_full_route_contact")
@@ -939,10 +964,10 @@ class VBotSection011FullRouteContactEnvCfg(
     route_waypoint_targets: tuple[tuple[float, float], ...] = (
         (0.6, -1.1),
         (0.6, -0.4),
-        (0.6, 1.2),
-        (0.6, 2.25),
-        (0.0, 4.0),
-        (0.0, 6.0),
+        (0.6, 1.6),
+        (0.6, 2.7),
+        (0.0, 4.5),
+        (0.0, 6.5),
         (0.0, 7.8),
     )
 
