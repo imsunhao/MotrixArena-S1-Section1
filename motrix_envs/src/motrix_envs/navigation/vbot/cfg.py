@@ -920,6 +920,8 @@ class VBotSection011RoughCorridorContactEnvCfg(
 
     locomotion_observations_only: bool = False
     locomotion_contact_force_observations: bool = True
+    # Metric only: crossing this gate neither terminates nor changes reward.
+    skill_goal_y: float | None = -1.1
 
 
 @registry.envcfg("vbot_locomotion_section011_full_route_contact")

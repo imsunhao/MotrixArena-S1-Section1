@@ -844,8 +844,11 @@ class VBotSection011Env(NpEnv):
         
         stable_success = state.info["stable_success"]
         skill_success = state.info["skill_success"]
-        if not getattr(self._cfg, "terminate_on_skill_goal", False):
-            skill_success = np.zeros(self._num_envs, dtype=bool)
+        skill_termination = (
+            skill_success
+            if getattr(self._cfg, "terminate_on_skill_goal", False)
+            else np.zeros(self._num_envs, dtype=bool)
+        )
         base_quat = data.dof_pos[:, self._base_quat_start:self._base_quat_end]
         quat_norm = np.linalg.norm(base_quat, axis=1)
         invalid_quaternion = np.logical_or(
@@ -853,7 +856,7 @@ class VBotSection011Env(NpEnv):
             np.logical_or(quat_norm < 0.5, quat_norm > 1.5),
         )
         terminated = np.logical_or.reduce(
-            (base_contact, stable_success, skill_success, invalid_quaternion)
+            (base_contact, stable_success, skill_termination, invalid_quaternion)
         )
 
         max_steps = self._cfg.max_episode_steps
