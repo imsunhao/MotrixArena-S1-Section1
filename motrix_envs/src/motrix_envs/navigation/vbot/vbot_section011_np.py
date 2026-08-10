@@ -67,8 +67,10 @@ class VBotSection011Env(NpEnv):
         
         # 动作和观测空间
         self._action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(12,), dtype=np.float32)
-        # 观测空间：67维（55 + 12维接触力）
-        self._observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(54,), dtype=np.float32)
+        # 54 task/proprioceptive features + 8 real terrain-height samples.
+        self._observation_space = gym.spaces.Box(
+            low=-np.inf, high=np.inf, shape=(62,), dtype=np.float32
+        )
         
         self._num_dof_pos = self._model.num_dof_pos
         self._num_dof_vel = self._model.num_dof_vel
@@ -93,6 +95,16 @@ class VBotSection011Env(NpEnv):
         self.spawn_height = float(cfg.init_state.pos[2])
         self.final_target_xy = np.asarray(cfg.target_xy, dtype=np.float32)
         self.initial_yaw_noise = float(cfg.initial_yaw_noise)
+        self.terrain_scan_distances = np.asarray(
+            cfg.terrain_scan_distances, dtype=np.float32
+        )
+        self._terrain_hfield = self._model.get_hfield("C_hfield_terrain")
+        self._terrain_height_matrix = np.asarray(
+            self._terrain_hfield.height_matrix, dtype=np.float32
+        )
+        self._terrain_hfield_bound = np.asarray(
+            self._terrain_hfield.bound, dtype=np.float32
+        )
 
         # 平台到达与停稳判定参数。
         self.platform_y_min = float(cfg.platform_y_min)
@@ -288,6 +300,59 @@ class VBotSection011Env(NpEnv):
         cosy_cosp = 1 - 2 * (qy * qy + qz * qz)
         heading = np.arctan2(siny_cosp, cosy_cosp)
         return heading
+
+    def _sample_terrain_height(
+        self, x: np.ndarray, y: np.ndarray
+    ) -> np.ndarray:
+        """Sample the actual hfield plus the analytic ramp/platform surfaces."""
+        x = np.asarray(x, dtype=np.float32)
+        y = np.asarray(y, dtype=np.float32)
+        height = np.zeros_like(x, dtype=np.float32)
+
+        x_min, y_min, _, x_max, y_max, _ = self._terrain_hfield_bound
+        on_hfield = np.logical_and.reduce(
+            (x >= x_min, x <= x_max, y >= y_min, y <= y_max)
+        )
+        if np.any(on_hfield):
+            matrix = self._terrain_height_matrix
+            column = (x[on_hfield] - x_min) / (x_max - x_min) * (
+                matrix.shape[1] - 1
+            )
+            # Image row zero is the positive-y edge of the heightfield.
+            row = (y_max - y[on_hfield]) / (y_max - y_min) * (
+                matrix.shape[0] - 1
+            )
+            c0 = np.floor(column).astype(np.int32)
+            r0 = np.floor(row).astype(np.int32)
+            c1 = np.minimum(c0 + 1, matrix.shape[1] - 1)
+            r1 = np.minimum(r0 + 1, matrix.shape[0] - 1)
+            dc = column - c0
+            dr = row - r0
+            height[on_hfield] = (
+                matrix[r0, c0] * (1.0 - dc) * (1.0 - dr)
+                + matrix[r0, c1] * dc * (1.0 - dr)
+                + matrix[r1, c0] * (1.0 - dc) * dr
+                + matrix[r1, c1] * dc * dr
+            )
+
+        ramp = np.logical_and(y >= 2.0, y < 6.82963)
+        height[ramp] = np.tan(np.deg2rad(15.0)) * (y[ramp] - 2.0)
+        height[y >= 6.82963] = 1.294
+        return height
+
+    def _get_terrain_scan(
+        self, root_pos: np.ndarray, root_quat: np.ndarray
+    ) -> np.ndarray:
+        heading = self._get_heading_from_quat(root_quat)
+        distances = self.terrain_scan_distances[None, :]
+        sample_x = root_pos[:, 0:1] + np.cos(heading)[:, None] * distances
+        sample_y = root_pos[:, 1:2] + np.sin(heading)[:, None] * distances
+        ahead_height = self._sample_terrain_height(sample_x, sample_y)
+        current_height = self._sample_terrain_height(
+            root_pos[:, 0], root_pos[:, 1]
+        )
+        delta = ahead_height - current_height[:, None]
+        return np.clip(delta * self._cfg.terrain_scan_scale, -1.0, 1.0)
 
     def _update_success_state(
         self,
@@ -539,6 +604,7 @@ class VBotSection011Env(NpEnv):
         
         stop_ready = state.info["stable_candidate"]
         stop_ready_flag = stop_ready.astype(np.float32)
+        terrain_scan = self._get_terrain_scan(root_pos, root_quat)
         
         obs = np.concatenate(
             [
@@ -554,10 +620,11 @@ class VBotSection011Env(NpEnv):
                 distance_normalized[:, np.newaxis],  # 1
                 reached_flag[:, np.newaxis],  # 1
                 stop_ready_flag[:, np.newaxis],  # 1
+                terrain_scan,  # 8 real forward terrain-height differences
             ],
             axis=-1,
         )
-        assert obs.shape == (data.shape[0], 54)  # 54 + 1 = 55维
+        assert obs.shape == (data.shape[0], 62)
         
         # 计算奖励
         reward = self._compute_reward(data, state.info, velocity_commands)
@@ -896,6 +963,7 @@ class VBotSection011Env(NpEnv):
             np.abs(gyro[:, 2]) < 5e-2
         )
         stop_ready_flag = stop_ready.astype(np.float32)
+        terrain_scan = self._get_terrain_scan(root_pos, root_quat)
 
         obs = np.concatenate(
             [
@@ -911,10 +979,11 @@ class VBotSection011Env(NpEnv):
                 distance_normalized[:, np.newaxis],  # 1
                 reached_flag[:, np.newaxis],  # 1
                 stop_ready_flag[:, np.newaxis],  # 1
+                terrain_scan,  # 8 real forward terrain-height differences
             ],
             axis=-1,
         )
-        assert obs.shape == (num_envs, 54)  # 54 + 1 = 55维
+        assert obs.shape == (num_envs, 62)
         
         info = {
             "pose_commands": pose_commands,

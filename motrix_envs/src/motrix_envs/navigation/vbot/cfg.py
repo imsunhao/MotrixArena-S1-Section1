@@ -340,6 +340,17 @@ class VBotSection011EnvCfg(VBotStairsEnvCfg):
     reward_stable_success: float = 300.0
     reward_feet_air_time: float = 1.0
     minimum_swing_seconds: float = 0.15
+    terrain_scan_distances: tuple[float, ...] = (
+        0.2,
+        0.4,
+        0.6,
+        0.8,
+        1.0,
+        1.2,
+        1.4,
+        1.6,
+    )
+    terrain_scan_scale: float = 2.0
     penalty_orientation: float = 0.5
     penalty_vertical_velocity: float = 2.0
     penalty_angular_xy: float = 0.05
@@ -347,7 +358,7 @@ class VBotSection011EnvCfg(VBotStairsEnvCfg):
     penalty_joint_velocity: float = 5e-5
     penalty_action_rate: float = 0.005
     penalty_stall: float = 0.3
-    penalty_feet_overstay: float = 0.05
+    penalty_feet_overstay: float = 0.02
     penalty_fall: float = 20.0
 
     @dataclass
