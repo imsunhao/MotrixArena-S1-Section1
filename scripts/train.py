@@ -48,6 +48,11 @@ _LEARNING_EPOCHS = flags.DEFINE_integer(
 _RATIO_CLIP = flags.DEFINE_float(
     "ratio-clip", None, "Override the PPO policy ratio clipping range"
 )
+_INITIAL_LOG_STD = flags.DEFINE_float(
+    "initial-log-std",
+    None,
+    "Override the initial Gaussian policy log standard deviation",
+)
 _RESUME_LOG_STD = flags.DEFINE_float(
     "resume-log-std",
     None,
@@ -105,6 +110,9 @@ def main(argv):
         if not 0 < _RATIO_CLIP.value <= 1:
             raise app.UsageError("--ratio-clip must be in (0, 1]")
         rl_override["ratio_clip"] = _RATIO_CLIP.value
+
+    if _INITIAL_LOG_STD.present:
+        rl_override["initial_log_std"] = _INITIAL_LOG_STD.value
 
     if _RESUME_LOG_STD.present and not _INITIAL_POLICY.value:
         raise app.UsageError("--resume-log-std requires --initial-policy")
