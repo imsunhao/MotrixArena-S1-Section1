@@ -342,6 +342,10 @@ class VBotSection011EnvCfg(VBotStairsEnvCfg):
     reward_tracking_linear: float = 1.5
     reward_tracking_yaw: float = 0.2
     reward_target_direction_velocity: float = 0.0
+    reward_skill_goal: float = 0.0
+    skill_goal_waypoint_idx: int | None = None
+    terminate_on_skill_goal: bool = False
+    navigation_speed_limit: float = 1.0
     reward_progress: float = 20.0
     reward_waypoint: float = 10.0
     reward_first_platform: float = 25.0
@@ -612,6 +616,54 @@ class VBotSection011Go1TransferFastTerrainSkillV3EnvCfg(
     observe_route_target: bool = False
     progress_uses_route_target: bool = True
     reward_target_direction_velocity: float = 1.0
+
+
+@registry.envcfg("vbot_navigation_section011_rough_skill_v4")
+@dataclass
+class VBotSection011RoughSkillV4EnvCfg(
+    VBotSection011Go1TransferTerrainSkillEnvCfg
+):
+    """Specialized heightfield locomotion skill with an explicit exit goal."""
+
+    curriculum_spawn_probabilities: tuple[float, ...] = (0.0, 1.0)
+    route_waypoint_targets: tuple[tuple[float, float], ...] = (
+        (0.0, -0.6),
+        (0.0, 1.2),
+        (0.0, 2.25),
+        (0.0, 4.0),
+        (0.0, 6.0),
+        (0.0, 6.9),
+        (0.0, 7.8),
+    )
+    route_drives_commands: bool = True
+    observe_route_target: bool = True
+    progress_uses_route_target: bool = True
+    navigation_speed_limit: float = 0.8
+
+    # Goal-direction velocity replaces fixed velocity tracking. Completing the
+    # rough segment (waypoint index 3, immediately after y=1.2) ends the
+    # episode with a sparse success reward.
+    reward_tracking_linear: float = 0.0
+    reward_progress: float = 0.0
+    reward_waypoint: float = 5.0
+    reward_target_direction_velocity: float = 2.0
+    reward_skill_goal: float = 200.0
+    skill_goal_waypoint_idx: int = 3
+    terminate_on_skill_goal: bool = True
+
+
+@registry.envcfg("vbot_navigation_section011_rough_skill_v4_safe")
+@dataclass
+class VBotSection011RoughSkillV4SafeEnvCfg(VBotSection011RoughSkillV4EnvCfg):
+    """Lower-amplitude rough skill used as the stability-first branch."""
+
+    navigation_speed_limit: float = 0.7
+
+    @dataclass
+    class ControlConfig(VBotSection011Go1TransferEnvCfg.ControlConfig):
+        action_scale = 0.05
+
+    control_config: ControlConfig = field(default_factory=ControlConfig)
 
 
 @registry.envcfg("vbot_navigation_section011_go1_transfer_fast_corridor_skill")

@@ -53,6 +53,8 @@ def generate_repeating_array(num_period, num_reset, period_counter):
 @registry.env("vbot_navigation_section011_go1_transfer_fast_terrain_skill", "np")
 @registry.env("vbot_navigation_section011_go1_transfer_fast_terrain_skill_v2", "np")
 @registry.env("vbot_navigation_section011_go1_transfer_fast_terrain_skill_v3", "np")
+@registry.env("vbot_navigation_section011_rough_skill_v4", "np")
+@registry.env("vbot_navigation_section011_rough_skill_v4_safe", "np")
 @registry.env("vbot_navigation_section011_go1_transfer_fast_corridor_skill", "np")
 @registry.env("vbot_navigation_section011", "np")
 class VBotSection011Env(NpEnv):
@@ -137,6 +139,7 @@ class VBotSection011Env(NpEnv):
         self.completed_episodes = 0
         self.ever_on_platform_episodes = 0
         self.stable_success_episodes = 0
+        self.skill_success_episodes = 0
         self.fall_episodes = 0
         self.timeout_episodes = 0
         self.invalid_state_episodes = 0
@@ -509,6 +512,8 @@ class VBotSection011Env(NpEnv):
             "stable_success_episodes": self.stable_success_episodes,
             "ever_on_platform_rate": self.ever_on_platform_episodes / denominator,
             "stable_success_rate": self.stable_success_episodes / denominator,
+            "skill_success_episodes": self.skill_success_episodes,
+            "skill_success_rate": self.skill_success_episodes / denominator,
             "fall_episodes": self.fall_episodes,
             "fall_rate": self.fall_episodes / denominator,
             "timeout_episodes": self.timeout_episodes,
@@ -682,7 +687,10 @@ class VBotSection011Env(NpEnv):
             robot_position, target_position, state.info["next_waypoint_idx"]
         )
         navigation_error = navigation_target - robot_position
-        desired_vel_xy = np.clip(navigation_error * 1.0, -1.0, 1.0)
+        speed_limit = float(getattr(cfg, "navigation_speed_limit", 1.0))
+        desired_vel_xy = np.clip(
+            navigation_error, -speed_limit, speed_limit
+        )
         desired_vel_xy = np.where(reached_all[:, np.newaxis], 0.0, desired_vel_xy)
         
         # 角速度命令：跟踪运动方向（从当前位置指向目标）
@@ -788,6 +796,9 @@ class VBotSection011Env(NpEnv):
             base_contact = np.zeros(self._num_envs, dtype=bool)
         
         stable_success = state.info["stable_success"]
+        skill_success = state.info["skill_success"]
+        if not getattr(self._cfg, "terminate_on_skill_goal", False):
+            skill_success = np.zeros(self._num_envs, dtype=bool)
         base_quat = data.dof_pos[:, self._base_quat_start:self._base_quat_end]
         quat_norm = np.linalg.norm(base_quat, axis=1)
         invalid_quaternion = np.logical_or(
@@ -795,7 +806,7 @@ class VBotSection011Env(NpEnv):
             np.logical_or(quat_norm < 0.5, quat_norm > 1.5),
         )
         terminated = np.logical_or.reduce(
-            (base_contact, stable_success, invalid_quaternion)
+            (base_contact, stable_success, skill_success, invalid_quaternion)
         )
 
         max_steps = self._cfg.max_episode_steps
@@ -811,6 +822,9 @@ class VBotSection011Env(NpEnv):
             )
             self.stable_success_episodes += int(
                 np.sum(stable_success[episode_done])
+            )
+            self.skill_success_episodes += int(
+                np.sum(skill_success[episode_done])
             )
             self.fall_episodes += int(np.sum(base_contact[episode_done]))
             self.timeout_episodes += int(np.sum(timeout[episode_done]))
@@ -877,8 +891,11 @@ class VBotSection011Env(NpEnv):
         target_delta = target_xy - root_pos[:, :2]
         target_distance = np.linalg.norm(target_delta, axis=1)
         target_direction = target_delta / np.maximum(target_distance[:, None], 1e-6)
+        target_velocity_cap = float(getattr(cfg, "navigation_speed_limit", 1.0))
         target_direction_velocity = np.clip(
-            np.sum(base_lin_vel[:, :2] * target_direction, axis=1), -1.0, 1.0
+            np.sum(base_lin_vel[:, :2] * target_direction, axis=1),
+            -target_velocity_cap,
+            target_velocity_cap,
         )
 
         waypoint_idx = info["next_waypoint_idx"]
@@ -888,8 +905,20 @@ class VBotSection011Env(NpEnv):
             has_waypoint, root_pos[:, 1] >= self.waypoint_y[safe_idx]
         )
         info["waypoint_reached_this_step"] = reached_waypoint
-        info["next_waypoint_idx"] = np.minimum(
+        next_waypoint_idx = np.minimum(
             waypoint_idx + reached_waypoint.astype(np.int32), len(self.waypoint_y)
+        )
+        info["next_waypoint_idx"] = next_waypoint_idx
+        skill_goal_idx = getattr(cfg, "skill_goal_waypoint_idx", None)
+        if skill_goal_idx is None:
+            skill_success_this_step = np.zeros(self._num_envs, dtype=bool)
+        else:
+            skill_success_this_step = np.logical_and(
+                waypoint_idx < skill_goal_idx, next_waypoint_idx >= skill_goal_idx
+            )
+        info["skill_success_this_step"] = skill_success_this_step
+        info["skill_success"] = np.logical_or(
+            info["skill_success"], skill_success_this_step
         )
         if np.any(reached_waypoint):
             self.waypoint_crossing_counts += np.bincount(
@@ -988,6 +1017,7 @@ class VBotSection011Env(NpEnv):
             cfg.reward_tracking_linear * tracking_linear
             + cfg.reward_tracking_yaw * tracking_yaw
             + cfg.reward_target_direction_velocity * target_direction_velocity
+            + cfg.reward_skill_goal * skill_success_this_step
             + cfg.reward_progress * progress_for_reward
             + cfg.reward_waypoint * reached_waypoint
             + cfg.reward_first_platform * info["first_on_platform"]
@@ -1149,7 +1179,10 @@ class VBotSection011Env(NpEnv):
             robot_position, target_position
         )
         navigation_error = navigation_target - robot_position
-        desired_vel_xy = np.clip(navigation_error * 1.0, -1.0, 1.0)
+        speed_limit = float(getattr(self._cfg, "navigation_speed_limit", 1.0))
+        desired_vel_xy = np.clip(
+            navigation_error, -speed_limit, speed_limit
+        )
         desired_vel_xy = np.where(reached_all[:, np.newaxis], 0.0, desired_vel_xy)
         
         base_lin_vel_xy = base_lin_vel[:, :2]
@@ -1262,6 +1295,8 @@ class VBotSection011Env(NpEnv):
             "stable_hold_steps": np.zeros(num_envs, dtype=np.int32),
             "stable_success": np.zeros(num_envs, dtype=bool),
             "stable_success_this_step": np.zeros(num_envs, dtype=bool),
+            "skill_success": np.zeros(num_envs, dtype=bool),
+            "skill_success_this_step": np.zeros(num_envs, dtype=bool),
             "feet_air_time": np.zeros(
                 (num_envs, self.num_foot_check), dtype=np.float32
             ),
