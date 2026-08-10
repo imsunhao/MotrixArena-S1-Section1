@@ -84,6 +84,10 @@ def main(argv):
             break
 
     metrics = raw_env.get_success_metrics()
+    info = raw_env.state.info
+    ongoing_max_y = np.asarray(info["episode_max_y"])
+    ongoing_start_y = np.asarray(info["episode_start_y"])
+    ongoing_waypoints = np.asarray(info["next_waypoint_idx"])
     metrics.update(
         {
             "policy": _POLICY.value,
@@ -96,6 +100,12 @@ def main(argv):
             "reached_episode_target": (
                 metrics["completed_episodes"] >= _EPISODES.value
             ),
+            "ongoing_mean_episode_max_y": float(np.mean(ongoing_max_y)),
+            "ongoing_max_episode_y": float(np.max(ongoing_max_y)),
+            "ongoing_mean_forward_progress": float(
+                np.mean(ongoing_max_y - ongoing_start_y)
+            ),
+            "ongoing_max_waypoints": int(np.max(ongoing_waypoints)),
         }
     )
     print(json.dumps(metrics, ensure_ascii=False, indent=2, sort_keys=True))
