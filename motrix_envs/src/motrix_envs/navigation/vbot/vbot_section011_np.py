@@ -51,6 +51,7 @@ def generate_repeating_array(num_period, num_reset, period_counter):
 @registry.env("vbot_navigation_section011_go1_transfer_medium_curriculum", "np")
 @registry.env("vbot_navigation_section011_go1_transfer_terrain_skill", "np")
 @registry.env("vbot_navigation_section011_go1_transfer_fast_terrain_skill", "np")
+@registry.env("vbot_navigation_section011_go1_transfer_fast_terrain_skill_v2", "np")
 @registry.env("vbot_navigation_section011_go1_transfer_fast_corridor_skill", "np")
 @registry.env("vbot_navigation_section011", "np")
 class VBotSection011Env(NpEnv):

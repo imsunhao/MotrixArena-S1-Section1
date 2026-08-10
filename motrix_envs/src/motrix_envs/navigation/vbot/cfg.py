@@ -566,6 +566,16 @@ class VBotSection011Go1TransferFastTerrainSkillEnvCfg(
     control_config: ControlConfig = field(default_factory=ControlConfig)
 
 
+@registry.envcfg("vbot_navigation_section011_go1_transfer_fast_terrain_skill_v2")
+@dataclass
+class VBotSection011Go1TransferFastTerrainSkillV2EnvCfg(
+    VBotSection011Go1TransferFastTerrainSkillEnvCfg
+):
+    """Reinforce rare rough-terrain gate crossings during conservative fine-tuning."""
+
+    reward_waypoint: float = 50.0
+
+
 @registry.envcfg("vbot_navigation_section011_go1_transfer_fast_corridor_skill")
 @dataclass
 class VBotSection011Go1TransferFastCorridorSkillEnvCfg(
