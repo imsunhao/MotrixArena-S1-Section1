@@ -43,6 +43,16 @@ _SIM_BACKEND = flags.DEFINE_string("sim-backend", None, "Simulation backend")
 _ACTION_SCALE = flags.DEFINE_float(
     "action-scale", None, "Override the VBot joint-target action scale for evaluation"
 )
+_BODY_FORWARD_SPEED = flags.DEFINE_float(
+    "body-forward-speed",
+    None,
+    "Command body-forward motion at this speed while yaw steers to waypoints",
+)
+_TERRAIN_ACTION_SCALE = flags.DEFINE_float(
+    "terrain-action-scale",
+    None,
+    "Override the post-blend joint-target action scale on rough terrain",
+)
 
 
 def main(argv):
@@ -67,6 +77,14 @@ def main(argv):
         if _ACTION_SCALE.value <= 0:
             raise app.UsageError("--action-scale must be positive")
         raw_env._cfg.control_config.action_scale = _ACTION_SCALE.value
+    if _BODY_FORWARD_SPEED.present:
+        if _BODY_FORWARD_SPEED.value <= 0:
+            raise app.UsageError("--body-forward-speed must be positive")
+        raw_env._cfg.navigation_body_forward_speed = _BODY_FORWARD_SPEED.value
+    if _TERRAIN_ACTION_SCALE.present:
+        if _TERRAIN_ACTION_SCALE.value <= 0:
+            raise app.UsageError("--terrain-action-scale must be positive")
+        raw_env._cfg.terrain_action_scale = _TERRAIN_ACTION_SCALE.value
 
     set_seed(rlcfg.seed)
     env = wrap_env(raw_env, enable_render=False)
@@ -101,6 +119,8 @@ def main(argv):
             "seed": _SEED.value,
             "num_envs": _NUM_ENVS.value,
             "action_scale": raw_env._cfg.control_config.action_scale,
+            "body_forward_speed": raw_env._cfg.navigation_body_forward_speed,
+            "terrain_action_scale": raw_env._cfg.terrain_action_scale,
             "control_steps": control_steps,
             "environment_transitions": transition_count,
             "mean_step_reward": reward_sum / max(transition_count, 1),

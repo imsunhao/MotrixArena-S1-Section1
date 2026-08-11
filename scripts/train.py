@@ -58,6 +58,16 @@ _RESUME_LOG_STD = flags.DEFINE_float(
     None,
     "JAX only: replace policy log standard deviation after loading a checkpoint",
 )
+_FREEZE_STATE_PREPROCESSOR = flags.DEFINE_bool(
+    "freeze-state-preprocessor",
+    False,
+    "JAX only: keep the loaded observation-normalization statistics fixed",
+)
+_RESET_OPTIMIZERS = flags.DEFINE_bool(
+    "reset-optimizers",
+    False,
+    "JAX only: discard optimizer state loaded from the initial policy",
+)
 _RENDER = flags.DEFINE_bool("render", False, "Render the env")
 _TRAIN_BACKEND = flags.DEFINE_string("train-backend", "jax", "The learning backend. (jax/torch)")
 _SEED = flags.DEFINE_integer("seed", None, "Random seed for reproducibility")
@@ -148,10 +158,19 @@ def main(argv):
         trainer.train(
             initial_policy=_INITIAL_POLICY.value,
             policy_log_std_override=_RESUME_LOG_STD.value,
+            freeze_state_preprocessor=_FREEZE_STATE_PREPROCESSOR.value,
+            reset_optimizers=_RESET_OPTIMIZERS.value,
         )
     else:
-        if _RESUME_LOG_STD.present:
-            raise app.UsageError("--resume-log-std currently requires --train-backend=jax")
+        if (
+            _RESUME_LOG_STD.present
+            or _FREEZE_STATE_PREPROCESSOR.value
+            or _RESET_OPTIMIZERS.value
+        ):
+            raise app.UsageError(
+                "resume/freeze/reset warm-start options currently require "
+                "--train-backend=jax"
+            )
         trainer.train(initial_policy=_INITIAL_POLICY.value)
 
 

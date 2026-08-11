@@ -35,10 +35,19 @@ from motrix_rl.skrl.cfg import PPOCfg
 from motrix_rl.skrl.jax import wrap_env
 
 
+class FrozenRunningStandardScaler(RunningStandardScaler):
+    """Use checkpoint normalization statistics without updating them."""
+
+    def __call__(self, x, train: bool = False, inverse: bool = False):
+        del train
+        return super().__call__(x, train=False, inverse=inverse)
+
+
 def _get_cfg(
     rlcfg: PPOCfg,
     env: Wrapper,
     log_dir: str = None,
+    freeze_state_preprocessor: bool = False,
 ) -> dict:
     # configure and instantiate the agent (visit its documentation to see all the options)
     # https://skrl.readthedocs.io/en/latest/api/agents/ppo.html#configuration-and-hyperparameters
@@ -65,7 +74,11 @@ def _get_cfg(
     else:
         cfg["rewards_shaper"] = None
     cfg["time_limit_bootstrap"] = rlcfg.time_limit_bootstrap
-    cfg["state_preprocessor"] = RunningStandardScaler
+    cfg["state_preprocessor"] = (
+        FrozenRunningStandardScaler
+        if freeze_state_preprocessor
+        else RunningStandardScaler
+    )
     cfg["state_preprocessor_kwargs"] = {
         "size": env.observation_space,
         "device": env.device,
@@ -168,6 +181,8 @@ class Trainer:
         self,
         initial_policy: str = None,
         policy_log_std_override: float = None,
+        freeze_state_preprocessor: bool = False,
+        reset_optimizers: bool = False,
     ) -> None:
         """
         Start training the agent.
@@ -178,10 +193,20 @@ class Trainer:
         set_seed(rlcfg.seed)
         skrl_env = wrap_env(env, self._enable_render)
         models = self._make_model(skrl_env, rlcfg)
-        ppo_cfg = _get_cfg(rlcfg, skrl_env, log_dir=get_log_dir(self._env_name))
+        ppo_cfg = _get_cfg(
+            rlcfg,
+            skrl_env,
+            log_dir=get_log_dir(self._env_name),
+            freeze_state_preprocessor=freeze_state_preprocessor,
+        )
         agent = self._make_agent(models, skrl_env, ppo_cfg)
         if initial_policy:
+            fresh_policy_optimizer = agent.policy_optimizer
+            fresh_value_optimizer = agent.value_optimizer
             agent.load(initial_policy)
+            if reset_optimizers:
+                agent.policy_optimizer = fresh_policy_optimizer
+                agent.value_optimizer = fresh_value_optimizer
             if policy_log_std_override is not None:
                 policy = agent.models["policy"]
                 params = policy.state_dict.params.copy()

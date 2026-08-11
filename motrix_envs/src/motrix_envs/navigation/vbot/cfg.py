@@ -343,10 +343,20 @@ class VBotSection011EnvCfg(VBotStairsEnvCfg):
     reward_tracking_yaw: float = 0.2
     reward_target_direction_velocity: float = 0.0
     reward_skill_goal: float = 0.0
+    reward_skill_stable_step: float = 0.0
     skill_goal_waypoint_idx: int | None = None
     skill_goal_y: float | None = None
     terminate_on_skill_goal: bool = False
+    skill_goal_require_stability: bool = False
+    skill_goal_hold_seconds: float = 0.0
+    skill_goal_upright_cos_min: float = 0.85
+    skill_goal_base_clearance_min: float = 0.35
+    skill_goal_angular_xy_max: float = 1.5
+    gate_motion_by_angular_stability: bool = False
+    motion_angular_xy_full_reward: float = 0.5
+    motion_angular_xy_zero_reward: float = 3.0
     navigation_speed_limit: float = 1.0
+    navigation_body_forward_speed: float | None = None
     clip_reward_nonnegative: bool = False
     reward_progress: float = 20.0
     reward_waypoint: float = 10.0
@@ -377,6 +387,9 @@ class VBotSection011EnvCfg(VBotStairsEnvCfg):
     penalty_stall: float = 0.3
     penalty_feet_overstay: float = 0.02
     penalty_fall: float = 20.0
+    terminal_fall_penalty: float = 0.0
+    terrain_action_scale: float | None = None
+    terrain_action_scale_blend_y: tuple[float, float] = (-1.7, -1.4)
 
     @dataclass
     class InitState:
@@ -1070,6 +1083,144 @@ class VBotSection011FullRouteContactEnvCfg(
     )
 
 
+@registry.envcfg("vbot_locomotion_section011_full_route_scale16to20")
+@dataclass
+class VBotSection011FullRouteScale16To20EnvCfg(
+    VBotSection011FullRouteContactEnvCfg
+):
+    """Blend a conservative flat scale into the terrain-trained scale."""
+
+    terrain_action_scale: float | None = 0.20
+
+    @dataclass
+    class ControlConfig(VBotSection011RoughCorridorLocomotionEnvCfg.ControlConfig):
+        action_scale = 0.16
+
+    control_config: ControlConfig = field(default_factory=ControlConfig)
+
+
+@registry.envcfg("vbot_locomotion_section011_full_route_scale17to20")
+@dataclass
+class VBotSection011FullRouteScale17To20EnvCfg(
+    VBotSection011FullRouteScale16To20EnvCfg
+):
+    """Use action scale 0.17 on flat ground and 0.20 on terrain."""
+
+    @dataclass
+    class ControlConfig(VBotSection011RoughCorridorLocomotionEnvCfg.ControlConfig):
+        action_scale = 0.17
+
+    control_config: ControlConfig = field(default_factory=ControlConfig)
+
+
+@registry.envcfg("vbot_locomotion_section011_full_route_scale18to20")
+@dataclass
+class VBotSection011FullRouteScale18To20EnvCfg(
+    VBotSection011FullRouteScale16To20EnvCfg
+):
+    """Use action scale 0.18 on flat ground and 0.20 on terrain."""
+
+    @dataclass
+    class ControlConfig(VBotSection011RoughCorridorLocomotionEnvCfg.ControlConfig):
+        action_scale = 0.18
+
+    control_config: ControlConfig = field(default_factory=ControlConfig)
+
+
+@registry.envcfg("vbot_locomotion_section011_full_route_scale19to20")
+@dataclass
+class VBotSection011FullRouteScale19To20EnvCfg(
+    VBotSection011FullRouteScale16To20EnvCfg
+):
+    """Use action scale 0.19 on flat ground and 0.20 on terrain."""
+
+    @dataclass
+    class ControlConfig(VBotSection011RoughCorridorLocomotionEnvCfg.ControlConfig):
+        action_scale = 0.19
+
+    control_config: ControlConfig = field(default_factory=ControlConfig)
+
+
+@registry.envcfg("vbot_locomotion_section011_full_route_scale17to20_late15")
+@dataclass
+class VBotSection011FullRouteScale17To20Late15EnvCfg(
+    VBotSection011FullRouteScale17To20EnvCfg
+):
+    """Delay the 0.17-to-0.20 blend until the first heightfield gate."""
+
+    terrain_action_scale_blend_y: tuple[float, float] = (-1.5, -1.1)
+
+
+@registry.envcfg("vbot_locomotion_section011_full_route_scale17to20_late14")
+@dataclass
+class VBotSection011FullRouteScale17To20Late14EnvCfg(
+    VBotSection011FullRouteScale17To20EnvCfg
+):
+    """Keep the conservative scale through more of the first ripple."""
+
+    terrain_action_scale_blend_y: tuple[float, float] = (-1.4, -1.0)
+
+
+@registry.envcfg("vbot_locomotion_section011_full_route_scale17to21")
+@dataclass
+class VBotSection011FullRouteScale17To21EnvCfg(
+    VBotSection011FullRouteScale17To20EnvCfg
+):
+    """Test a slightly larger terrain endpoint with the original blend."""
+
+    terrain_action_scale: float | None = 0.21
+
+
+@registry.envcfg("vbot_locomotion_section011_full_route_scale17to21_late15")
+@dataclass
+class VBotSection011FullRouteScale17To21Late15EnvCfg(
+    VBotSection011FullRouteScale17To21EnvCfg
+):
+    """Combine the later blend with a 0.21 terrain endpoint."""
+
+    terrain_action_scale_blend_y: tuple[float, float] = (-1.5, -1.1)
+
+
+@registry.envcfg("vbot_locomotion_section011_full_route_scale17to1975")
+@dataclass
+class VBotSection011FullRouteScale17To1975EnvCfg(
+    VBotSection011FullRouteScale17To20EnvCfg
+):
+    """Narrow terrain endpoint scan below 0.20."""
+
+    terrain_action_scale: float | None = 0.1975
+
+
+@registry.envcfg("vbot_locomotion_section011_full_route_scale17to2025")
+@dataclass
+class VBotSection011FullRouteScale17To2025EnvCfg(
+    VBotSection011FullRouteScale17To20EnvCfg
+):
+    """Narrow terrain endpoint scan just above 0.20."""
+
+    terrain_action_scale: float | None = 0.2025
+
+
+@registry.envcfg("vbot_locomotion_section011_full_route_scale17to205")
+@dataclass
+class VBotSection011FullRouteScale17To205EnvCfg(
+    VBotSection011FullRouteScale17To20EnvCfg
+):
+    """Narrow terrain endpoint scan at 0.205."""
+
+    terrain_action_scale: float | None = 0.205
+
+
+@registry.envcfg("vbot_locomotion_section011_full_route_scale17to20_early")
+@dataclass
+class VBotSection011FullRouteScale17To20EarlyEnvCfg(
+    VBotSection011FullRouteScale17To20EnvCfg
+):
+    """Reach the 0.20 terrain scale before the first waypoint."""
+
+    terrain_action_scale_blend_y: tuple[float, float] = (-1.9, -1.6)
+
+
 @registry.envcfg("vbot_locomotion_section011_approach_stage0")
 @dataclass
 class VBotSection011ApproachStage0EnvCfg(
@@ -1130,6 +1281,327 @@ class VBotSection011IntegratedStage050EnvCfg(
     """Balance official and rough starts equally after integration succeeds."""
 
     curriculum_spawn_probabilities: tuple[float, ...] = (0.5, 0.5)
+
+
+@registry.envcfg("vbot_locomotion_section011_integrated_stage1_70")
+@dataclass
+class VBotSection011IntegratedStage170EnvCfg(
+    VBotSection011IntegratedStage075EnvCfg
+):
+    """Extend the integrated curriculum with a pre-heightfield transition."""
+
+    curriculum_spawn_probabilities: tuple[float, ...] = (0.7, 0.15, 0.15)
+    curriculum_transition_x_range: tuple[float, float] = (0.5, 0.7)
+    curriculum_transition_y_range: tuple[float, float] = (-1.65, -1.55)
+    curriculum_transition_spawn_z: float = 0.5
+    max_episode_seconds: float = 25.0
+    max_episode_steps: int = 2500
+    skill_goal_y: float | None = -0.75
+
+
+@registry.envcfg("vbot_locomotion_section011_integrated_gate105_70")
+@dataclass
+class VBotSection011IntegratedGate10570EnvCfg(
+    VBotSection011IntegratedStage170EnvCfg
+):
+    """Advance only 5 cm beyond the first integrated gate."""
+
+    max_episode_seconds: float = 20.0
+    max_episode_steps: int = 2000
+    skill_goal_y: float | None = -1.05
+
+
+@registry.envcfg("vbot_locomotion_section011_integrated_gate105_stable_70")
+@dataclass
+class VBotSection011IntegratedGate105Stable70EnvCfg(
+    VBotSection011IntegratedGate10570EnvCfg
+):
+    """Require a controlled crossing instead of rewarding a diving fall."""
+
+    skill_goal_require_stability: bool = True
+    skill_goal_hold_seconds: float = 0.05
+    skill_goal_upright_cos_min: float = 0.7
+    skill_goal_base_clearance_min: float = 0.25
+    skill_goal_angular_xy_max: float = 3.0
+
+
+@registry.envcfg("vbot_locomotion_section011_integrated_gate100_stable_70")
+@dataclass
+class VBotSection011IntegratedGate100Stable70EnvCfg(
+    VBotSection011IntegratedGate105Stable70EnvCfg
+):
+    """Advance the controlled crossing curriculum by another 5 cm."""
+
+    skill_goal_y: float | None = -1.0
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_integrated_gate100_stable_scale17to20"
+)
+@dataclass
+class VBotSection011IntegratedGate100StableScale17To20EnvCfg(
+    VBotSection011IntegratedGate100Stable70EnvCfg
+):
+    """Train and evaluate with the same flat-to-terrain action-scale blend."""
+
+    terrain_action_scale: float | None = 0.20
+
+    @dataclass
+    class ControlConfig(VBotSection011RoughCorridorLocomotionEnvCfg.ControlConfig):
+        action_scale = 0.17
+
+    control_config: ControlConfig = field(default_factory=ControlConfig)
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_integrated_gate095_stable_scale17to20"
+)
+@dataclass
+class VBotSection011IntegratedGate095StableScale17To20EnvCfg(
+    VBotSection011IntegratedGate100StableScale17To20EnvCfg
+):
+    """Advance the staged-scale controlled curriculum by 5 cm."""
+
+    skill_goal_y: float | None = -0.95
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_integrated_gate095_hold03_scale17to20"
+)
+@dataclass
+class VBotSection011IntegratedGate095Hold03Scale17To20EnvCfg(
+    VBotSection011IntegratedGate095StableScale17To20EnvCfg
+):
+    """Bootstrap the new gate with a three-control-step stable crossing."""
+
+    skill_goal_hold_seconds: float = 0.03
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_integrated_gate095_dense_safe_scale17to20"
+)
+@dataclass
+class VBotSection011IntegratedGate095DenseSafeScale17To20EnvCfg(
+    VBotSection011IntegratedGate095StableScale17To20EnvCfg
+):
+    """Reward each controlled post-gate step without a dominant terminal bonus."""
+
+    gate_progress_by_stability: bool = True
+    reward_skill_stable_step: float = 2.0
+    reward_skill_goal: float = 50.0
+    terminal_fall_penalty: float = 10.0
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_integrated_gate095_dense5_safe_scale17to20"
+)
+@dataclass
+class VBotSection011IntegratedGate095Dense5SafeScale17To20EnvCfg(
+    VBotSection011IntegratedGate095DenseSafeScale17To20EnvCfg
+):
+    """Give stronger credit for extending a stable post-gate hold."""
+
+    reward_skill_stable_step: float = 5.0
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_integrated_gate095_balanced_safe_scale17to20"
+)
+@dataclass
+class VBotSection011IntegratedGate095BalancedSafeScale17To20EnvCfg(
+    VBotSection011IntegratedGate095DenseSafeScale17To20EnvCfg
+):
+    """Further reduce sparse credit and increase the cost of a terminal fall."""
+
+    reward_skill_goal: float = 20.0
+    terminal_fall_penalty: float = 20.0
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_integrated_gate095_hold03_dense_safe_scale17to20"
+)
+@dataclass
+class VBotSection011IntegratedGate095Hold03DenseSafeScale17To20EnvCfg(
+    VBotSection011IntegratedGate095DenseSafeScale17To20EnvCfg
+):
+    """Compare dense shaping with the easier three-step bootstrap gate."""
+
+    skill_goal_hold_seconds: float = 0.03
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_integrated_forward06_no_skill"
+)
+@dataclass
+class VBotSection011IntegratedForward06NoSkillEnvCfg(
+    VBotSection011IntegratedGate100StableScale17To20EnvCfg
+):
+    """Adapt the gait to body-forward waypoint commands without sparse credit."""
+
+    navigation_body_forward_speed: float | None = 0.6
+    skill_goal_y: float | None = None
+    reward_skill_goal: float = 0.0
+    terminate_on_skill_goal: bool = False
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_integrated_gate100_stable_forward06"
+)
+@dataclass
+class VBotSection011IntegratedGate100StableForward06EnvCfg(
+    VBotSection011IntegratedGate100StableScale17To20EnvCfg
+):
+    """Adapt body-forward commands while retaining the last mastered gate."""
+
+    navigation_body_forward_speed: float | None = 0.6
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_integrated_gate100_dense_safe_forward06"
+)
+@dataclass
+class VBotSection011IntegratedGate100DenseSafeForward06EnvCfg(
+    VBotSection011IntegratedGate100StableForward06EnvCfg
+):
+    """Adapt body-forward commands with balanced stable-hold shaping."""
+
+    gate_progress_by_stability: bool = True
+    reward_skill_stable_step: float = 2.0
+    reward_skill_goal: float = 50.0
+    terminal_fall_penalty: float = 10.0
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_integrated_gate100_angular_safe_scale17to20"
+)
+@dataclass
+class VBotSection011IntegratedGate100AngularSafeScale17To20EnvCfg(
+    VBotSection011IntegratedGate100StableScale17To20EnvCfg
+):
+    """Stop rewarding forward motion as roll/pitch rate approaches a fall."""
+
+    gate_progress_by_stability: bool = True
+    gate_motion_by_angular_stability: bool = True
+    reward_skill_goal: float = 100.0
+    terminal_fall_penalty: float = 10.0
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_integrated_gate100_angular_strict_scale17to20"
+)
+@dataclass
+class VBotSection011IntegratedGate100AngularStrictScale17To20EnvCfg(
+    VBotSection011IntegratedGate100AngularSafeScale17To20EnvCfg
+):
+    """Remove positive motion credit above 2 rad/s roll/pitch rate."""
+
+    motion_angular_xy_zero_reward: float = 2.0
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_integrated_gate100_angular_safe_forward06"
+)
+@dataclass
+class VBotSection011IntegratedGate100AngularSafeForward06EnvCfg(
+    VBotSection011IntegratedGate100StableForward06EnvCfg
+):
+    """Apply angular-stability shaping to body-forward waypoint control."""
+
+    gate_progress_by_stability: bool = True
+    gate_motion_by_angular_stability: bool = True
+    reward_skill_goal: float = 100.0
+    terminal_fall_penalty: float = 10.0
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_integrated_gate100_angular_strict_forward06"
+)
+@dataclass
+class VBotSection011IntegratedGate100AngularStrictForward06EnvCfg(
+    VBotSection011IntegratedGate100AngularSafeForward06EnvCfg
+):
+    """Use the stricter angular motion gate with body-forward commands."""
+
+    motion_angular_xy_zero_reward: float = 2.0
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_integrated_gate095_angular_safe_forward06"
+)
+@dataclass
+class VBotSection011IntegratedGate095AngularSafeForward06EnvCfg(
+    VBotSection011IntegratedGate100AngularSafeForward06EnvCfg
+):
+    """Advance the angular-safe body-forward curriculum by five centimeters."""
+
+    skill_goal_y: float | None = -0.95
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_integrated_gate095_hold03_angular_safe_forward06"
+)
+@dataclass
+class VBotSection011IntegratedGate095Hold03AngularSafeForward06EnvCfg(
+    VBotSection011IntegratedGate095AngularSafeForward06EnvCfg
+):
+    """Bootstrap the advanced angular-safe gate with a three-step hold."""
+
+    skill_goal_hold_seconds: float = 0.03
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_integrated_gate095_dense_angular_safe_forward06"
+)
+@dataclass
+class VBotSection011IntegratedGate095DenseAngularSafeForward06EnvCfg(
+    VBotSection011IntegratedGate095AngularSafeForward06EnvCfg
+):
+    """Credit partial stable holds at the advanced angular-safe gate."""
+
+    reward_skill_stable_step: float = 2.0
+    reward_skill_goal: float = 50.0
+
+
+@registry.envcfg("vbot_locomotion_section011_integrated_gate100_hold10_70")
+@dataclass
+class VBotSection011IntegratedGate100Hold1070EnvCfg(
+    VBotSection011IntegratedGate100Stable70EnvCfg
+):
+    """Reward controlled post-gate survival before granting completion."""
+
+    skill_goal_hold_seconds: float = 0.1
+    reward_skill_stable_step: float = 2.0
+    reward_skill_goal: float = 100.0
+
+
+@registry.envcfg("vbot_locomotion_section011_integrated_gate100_hold10_fall10_70")
+@dataclass
+class VBotSection011IntegratedGate100Hold10Fall1070EnvCfg(
+    VBotSection011IntegratedGate100Hold1070EnvCfg
+):
+    """Keep a modest negative terminal signal after positive reward clipping."""
+
+    terminal_fall_penalty: float = 10.0
+
+
+@registry.envcfg("vbot_locomotion_section011_integrated_stage1_60")
+@dataclass
+class VBotSection011IntegratedStage160EnvCfg(
+    VBotSection011IntegratedStage170EnvCfg
+):
+    """Use a balanced 60/20/20 official/rough/transition mixture."""
+
+    curriculum_spawn_probabilities: tuple[float, ...] = (0.6, 0.2, 0.2)
+
+
+@registry.envcfg("vbot_locomotion_section011_integrated_stage1_50")
+@dataclass
+class VBotSection011IntegratedStage150EnvCfg(
+    VBotSection011IntegratedStage170EnvCfg
+):
+    """Increase local exposure while retaining half official starts."""
+
+    curriculum_spawn_probabilities: tuple[float, ...] = (0.5, 0.25, 0.25)
 
 
 @registry.envcfg("vbot_locomotion_section011_mixed_route_contact")

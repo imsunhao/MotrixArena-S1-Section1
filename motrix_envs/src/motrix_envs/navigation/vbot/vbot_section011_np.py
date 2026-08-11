@@ -79,11 +79,86 @@ def generate_repeating_array(num_period, num_reset, period_counter):
 @registry.env("vbot_locomotion_section011_rough_corridor_stage15", "np")
 @registry.env("vbot_locomotion_section011_rough_corridor_stage2", "np")
 @registry.env("vbot_locomotion_section011_full_route_contact", "np")
+@registry.env("vbot_locomotion_section011_full_route_scale16to20", "np")
+@registry.env("vbot_locomotion_section011_full_route_scale17to20", "np")
+@registry.env("vbot_locomotion_section011_full_route_scale18to20", "np")
+@registry.env("vbot_locomotion_section011_full_route_scale19to20", "np")
+@registry.env("vbot_locomotion_section011_full_route_scale17to20_late15", "np")
+@registry.env("vbot_locomotion_section011_full_route_scale17to20_late14", "np")
+@registry.env("vbot_locomotion_section011_full_route_scale17to21", "np")
+@registry.env("vbot_locomotion_section011_full_route_scale17to21_late15", "np")
+@registry.env("vbot_locomotion_section011_full_route_scale17to1975", "np")
+@registry.env("vbot_locomotion_section011_full_route_scale17to2025", "np")
+@registry.env("vbot_locomotion_section011_full_route_scale17to205", "np")
+@registry.env("vbot_locomotion_section011_full_route_scale17to20_early", "np")
 @registry.env("vbot_locomotion_section011_approach_stage0", "np")
 @registry.env("vbot_locomotion_section011_approach", "np")
 @registry.env("vbot_locomotion_section011_integrated_stage0_90", "np")
 @registry.env("vbot_locomotion_section011_integrated_stage0_75", "np")
 @registry.env("vbot_locomotion_section011_integrated_stage0_50", "np")
+@registry.env("vbot_locomotion_section011_integrated_stage1_70", "np")
+@registry.env("vbot_locomotion_section011_integrated_stage1_60", "np")
+@registry.env("vbot_locomotion_section011_integrated_stage1_50", "np")
+@registry.env("vbot_locomotion_section011_integrated_gate105_70", "np")
+@registry.env("vbot_locomotion_section011_integrated_gate105_stable_70", "np")
+@registry.env("vbot_locomotion_section011_integrated_gate100_stable_70", "np")
+@registry.env(
+    "vbot_locomotion_section011_integrated_gate100_stable_scale17to20", "np"
+)
+@registry.env(
+    "vbot_locomotion_section011_integrated_gate095_stable_scale17to20", "np"
+)
+@registry.env(
+    "vbot_locomotion_section011_integrated_gate095_hold03_scale17to20", "np"
+)
+@registry.env(
+    "vbot_locomotion_section011_integrated_gate095_dense_safe_scale17to20", "np"
+)
+@registry.env(
+    "vbot_locomotion_section011_integrated_gate095_dense5_safe_scale17to20", "np"
+)
+@registry.env(
+    "vbot_locomotion_section011_integrated_gate095_balanced_safe_scale17to20", "np"
+)
+@registry.env(
+    "vbot_locomotion_section011_integrated_gate095_hold03_dense_safe_scale17to20",
+    "np",
+)
+@registry.env("vbot_locomotion_section011_integrated_forward06_no_skill", "np")
+@registry.env(
+    "vbot_locomotion_section011_integrated_gate100_stable_forward06", "np"
+)
+@registry.env(
+    "vbot_locomotion_section011_integrated_gate100_dense_safe_forward06", "np"
+)
+@registry.env(
+    "vbot_locomotion_section011_integrated_gate100_angular_safe_scale17to20", "np"
+)
+@registry.env(
+    "vbot_locomotion_section011_integrated_gate100_angular_strict_scale17to20",
+    "np",
+)
+@registry.env(
+    "vbot_locomotion_section011_integrated_gate100_angular_safe_forward06", "np"
+)
+@registry.env(
+    "vbot_locomotion_section011_integrated_gate100_angular_strict_forward06", "np"
+)
+@registry.env(
+    "vbot_locomotion_section011_integrated_gate095_angular_safe_forward06", "np"
+)
+@registry.env(
+    "vbot_locomotion_section011_integrated_gate095_hold03_angular_safe_forward06",
+    "np",
+)
+@registry.env(
+    "vbot_locomotion_section011_integrated_gate095_dense_angular_safe_forward06",
+    "np",
+)
+@registry.env("vbot_locomotion_section011_integrated_gate100_hold10_70", "np")
+@registry.env(
+    "vbot_locomotion_section011_integrated_gate100_hold10_fall10_70", "np"
+)
 @registry.env("vbot_locomotion_section011_mixed_route_contact", "np")
 @registry.env("vbot_navigation_section011_go1_transfer_fast_corridor_skill", "np")
 @registry.env("vbot_navigation_section011", "np")
@@ -188,6 +263,19 @@ class VBotSection011Env(NpEnv):
         self.episode_max_y = float("-inf")
         self.all_time_max_y = float("-inf")
         self.all_time_max_waypoints = 0
+        self.fall_y_bin_edges = np.asarray(
+            [-np.inf, -1.7, -1.5, -1.3, -1.1, -0.9, -0.6, 1.2, np.inf],
+            dtype=np.float32,
+        )
+        self.fall_position_y_histogram = np.zeros(
+            len(self.fall_y_bin_edges) - 1, dtype=np.int64
+        )
+        self.fall_episode_max_y_histogram = np.zeros_like(
+            self.fall_position_y_histogram
+        )
+        self.fall_upright_cos_sum = 0.0
+        self.fall_angular_xy_sum = 0.0
+        self.fall_base_clearance_sum = 0.0
 
         self.waypoint_y = np.asarray(cfg.waypoint_y, dtype=np.float32)
         configured_route_targets = getattr(cfg, "route_waypoint_targets", None)
@@ -348,7 +436,21 @@ class VBotSection011Env(NpEnv):
     
     def _compute_torques(self, actions, data):
         """计算PD控制力矩（VBot使用motor执行器，需要力矩控制）"""
-        action_scaled = actions * self._cfg.control_config.action_scale
+        action_scale = float(self._cfg.control_config.action_scale)
+        terrain_action_scale = getattr(self._cfg, "terrain_action_scale", None)
+        if terrain_action_scale is not None:
+            root_y = self._body.get_pose(data)[:, 1]
+            blend_start, blend_end = self._cfg.terrain_action_scale_blend_y
+            blend = np.clip(
+                (root_y - blend_start) / (blend_end - blend_start),
+                0.0,
+                1.0,
+            )
+            action_scale = action_scale + blend * (
+                float(terrain_action_scale) - action_scale
+            )
+            action_scale = action_scale[:, None]
+        action_scaled = actions * action_scale
         target_pos = self.default_angles + action_scaled
         
         # 获取当前关节状态
@@ -500,6 +602,62 @@ class VBotSection011Env(NpEnv):
         navigation_target[before_exit, 1] = self._cfg.terrain_exit_y
         return navigation_target
 
+    def _compute_navigation_commands(
+        self,
+        robot_position: np.ndarray,
+        robot_heading: np.ndarray,
+        navigation_target: np.ndarray,
+        reached_all: np.ndarray,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Build world-frame velocity commands for the active route target.
+
+        The default preserves the original component-wise position controller.
+        Experiments can instead command body-forward motion while using yaw to
+        steer toward the waypoint, matching the route controller described in
+        the Section 1 teaching material without changing the observation size.
+        """
+        navigation_error = navigation_target - robot_position
+        desired_heading = np.arctan2(
+            navigation_error[:, 1], navigation_error[:, 0]
+        )
+        heading_to_movement = desired_heading - robot_heading
+        heading_to_movement = (heading_to_movement + np.pi) % (2 * np.pi) - np.pi
+
+        body_forward_speed = getattr(
+            self._cfg, "navigation_body_forward_speed", None
+        )
+        if body_forward_speed is None:
+            speed_limit = float(
+                getattr(self._cfg, "navigation_speed_limit", 1.0)
+            )
+            desired_vel_xy = np.clip(
+                navigation_error, -speed_limit, speed_limit
+            )
+        else:
+            distance = np.linalg.norm(navigation_error, axis=1)
+            forward_speed = np.minimum(float(body_forward_speed), distance)
+            desired_vel_xy = np.column_stack(
+                [
+                    np.cos(robot_heading) * forward_speed,
+                    np.sin(robot_heading) * forward_speed,
+                ]
+            )
+
+        desired_yaw_rate = np.clip(heading_to_movement, -1.0, 1.0)
+        desired_yaw_rate = np.where(
+            np.abs(heading_to_movement) < np.deg2rad(8),
+            0.0,
+            desired_yaw_rate,
+        )
+        desired_vel_xy = np.where(
+            reached_all[:, np.newaxis], 0.0, desired_vel_xy
+        )
+        desired_yaw_rate = np.where(reached_all, 0.0, desired_yaw_rate)
+        velocity_commands = np.concatenate(
+            [desired_vel_xy, desired_yaw_rate[:, np.newaxis]], axis=-1
+        )
+        return navigation_error, heading_to_movement, velocity_commands
+
     def _get_route_target(
         self, final_target: np.ndarray, waypoint_indices: np.ndarray
     ) -> np.ndarray:
@@ -588,6 +746,17 @@ class VBotSection011Env(NpEnv):
             "mean_forward_progress": self.episode_forward_progress_sum / denominator,
             "waypoint_episode_histogram": self.waypoint_episode_histogram.tolist(),
             "waypoint_crossing_counts": self.waypoint_crossing_counts.tolist(),
+            "fall_y_bin_edges": self.fall_y_bin_edges.tolist(),
+            "fall_position_y_histogram": self.fall_position_y_histogram.tolist(),
+            "fall_episode_max_y_histogram": (
+                self.fall_episode_max_y_histogram.tolist()
+            ),
+            "mean_fall_upright_cos": self.fall_upright_cos_sum
+            / max(self.fall_episodes, 1),
+            "mean_fall_angular_xy": self.fall_angular_xy_sum
+            / max(self.fall_episodes, 1),
+            "mean_fall_base_clearance": self.fall_base_clearance_sum
+            / max(self.fall_episodes, 1),
         }
     
     def _update_target_marker(self, data: mtx.SceneData, pose_commands: np.ndarray):
@@ -742,30 +911,14 @@ class VBotSection011Env(NpEnv):
         navigation_target = self._get_navigation_target(
             robot_position, target_position, state.info["next_waypoint_idx"]
         )
-        navigation_error = navigation_target - robot_position
-        speed_limit = float(getattr(cfg, "navigation_speed_limit", 1.0))
-        desired_vel_xy = np.clip(
-            navigation_error, -speed_limit, speed_limit
+        (
+            navigation_error,
+            heading_to_movement,
+            velocity_commands,
+        ) = self._compute_navigation_commands(
+            robot_position, robot_heading, navigation_target, reached_all
         )
-        desired_vel_xy = np.where(reached_all[:, np.newaxis], 0.0, desired_vel_xy)
-        
-        # 角速度命令：跟踪运动方向（从当前位置指向目标）
-        # 与vbot_np保持一致的增益和上限，确保转向足够快
-        desired_heading = np.arctan2(navigation_error[:, 1], navigation_error[:, 0])
-        heading_to_movement = desired_heading - robot_heading
-        heading_to_movement = np.where(heading_to_movement > np.pi, heading_to_movement - 2*np.pi, heading_to_movement)
-        heading_to_movement = np.where(heading_to_movement < -np.pi, heading_to_movement + 2*np.pi, heading_to_movement)
-        desired_yaw_rate = np.clip(heading_to_movement * 1.0, -1.0, 1.0)  # 增益和上限与vbot_np一致
-        deadband_yaw = np.deg2rad(8)
-        desired_yaw_rate = np.where(np.abs(heading_to_movement) < deadband_yaw, 0.0, desired_yaw_rate)
-        desired_yaw_rate = np.where(reached_all, 0.0, desired_yaw_rate)
-        
-        if desired_yaw_rate.ndim > 1:
-            desired_yaw_rate = desired_yaw_rate.flatten()
-        
-        velocity_commands = np.concatenate(
-            [desired_vel_xy, desired_yaw_rate[:, np.newaxis]], axis=-1
-        )
+        desired_vel_xy = velocity_commands[:, :2]
         
         # 归一化观测
         policy_lin_vel, policy_commands = self._get_policy_frame_motion(
@@ -882,6 +1035,34 @@ class VBotSection011Env(NpEnv):
             timeout = state.info["steps"] + 1 >= max_steps
         episode_done = np.logical_or(terminated, timeout)
         if np.any(episode_done):
+            fall_mask = np.logical_and(base_contact, episode_done)
+            if np.any(fall_mask):
+                root_pos, root_quat, _ = self._extract_root_state(data)
+                projected_gravity = self._compute_projected_gravity(root_quat)
+                gyro = self._model.get_sensor_value(
+                    self._cfg.sensor.base_gyro, data
+                )
+                terrain_height = self._sample_terrain_height(
+                    root_pos[:, 0], root_pos[:, 1]
+                )
+                base_clearance = root_pos[:, 2] - terrain_height
+                fall_y = root_pos[fall_mask, 1]
+                fall_episode_max_y = state.info["episode_max_y"][fall_mask]
+                self.fall_position_y_histogram += np.histogram(
+                    fall_y, bins=self.fall_y_bin_edges
+                )[0]
+                self.fall_episode_max_y_histogram += np.histogram(
+                    fall_episode_max_y, bins=self.fall_y_bin_edges
+                )[0]
+                self.fall_upright_cos_sum += float(
+                    np.sum(-projected_gravity[fall_mask, 2])
+                )
+                self.fall_angular_xy_sum += float(
+                    np.sum(np.linalg.norm(gyro[fall_mask, :2], axis=1))
+                )
+                self.fall_base_clearance_sum += float(
+                    np.sum(base_clearance[fall_mask])
+                )
             self.completed_episodes += int(np.sum(episode_done))
             self.ever_on_platform_episodes += int(
                 np.sum(state.info["ever_on_platform"][episode_done])
@@ -975,18 +1156,55 @@ class VBotSection011Env(NpEnv):
             waypoint_idx + reached_waypoint.astype(np.int32), len(self.waypoint_y)
         )
         info["next_waypoint_idx"] = next_waypoint_idx
+        projected_gravity = self._compute_projected_gravity(root_quat)
+        terrain_height = self._sample_terrain_height(
+            root_pos[:, 0], root_pos[:, 1]
+        )
+        base_clearance = root_pos[:, 2] - terrain_height
         skill_goal_y = getattr(cfg, "skill_goal_y", None)
         skill_goal_idx = getattr(cfg, "skill_goal_waypoint_idx", None)
         if skill_goal_y is not None:
-            skill_success_this_step = np.logical_and(
-                ~info["skill_success"], root_pos[:, 1] >= skill_goal_y
-            )
+            reached_skill_goal = root_pos[:, 1] >= skill_goal_y
         elif skill_goal_idx is None:
-            skill_success_this_step = np.zeros(self._num_envs, dtype=bool)
+            reached_skill_goal = np.zeros(self._num_envs, dtype=bool)
         else:
-            skill_success_this_step = np.logical_and(
-                waypoint_idx < skill_goal_idx, next_waypoint_idx >= skill_goal_idx
+            reached_skill_goal = np.logical_and(
+                waypoint_idx < skill_goal_idx,
+                next_waypoint_idx >= skill_goal_idx,
             )
+
+        if getattr(cfg, "skill_goal_require_stability", False):
+            upright_cos = -projected_gravity[:, 2]
+            angular_xy = np.linalg.norm(gyro[:, :2], axis=1)
+            stable_crossing = np.logical_and.reduce(
+                (
+                    reached_skill_goal,
+                    upright_cos >= cfg.skill_goal_upright_cos_min,
+                    base_clearance >= cfg.skill_goal_base_clearance_min,
+                    angular_xy <= cfg.skill_goal_angular_xy_max,
+                )
+            )
+            info["skill_goal_stable_candidate"] = stable_crossing
+            info["skill_goal_hold_steps"] = np.where(
+                stable_crossing,
+                info["skill_goal_hold_steps"] + 1,
+                0,
+            )
+            required_hold_steps = max(
+                1, int(round(cfg.skill_goal_hold_seconds / cfg.ctrl_dt))
+            )
+            reached_skill_goal = (
+                info["skill_goal_hold_steps"] >= required_hold_steps
+            )
+        else:
+            info["skill_goal_stable_candidate"] = reached_skill_goal
+            info["skill_goal_hold_steps"] = np.where(
+                reached_skill_goal, info["skill_goal_hold_steps"] + 1, 0
+            )
+
+        skill_success_this_step = np.logical_and(
+            ~info["skill_success"], reached_skill_goal
+        )
         info["skill_success_this_step"] = skill_success_this_step
         info["skill_success"] = np.logical_or(
             info["skill_success"], skill_success_this_step
@@ -1003,13 +1221,8 @@ class VBotSection011Env(NpEnv):
             int(np.max(info["next_waypoint_idx"])),
         )
 
-        projected_gravity = self._compute_projected_gravity(root_quat)
         orientation_cost = np.sum(np.square(projected_gravity[:, :2]), axis=1)
         vertical_velocity_cost = np.square(base_lin_vel[:, 2])
-        terrain_height = self._sample_terrain_height(
-            root_pos[:, 0], root_pos[:, 1]
-        )
-        base_clearance = root_pos[:, 2] - terrain_height
         base_height_cost = np.square(
             base_clearance - cfg.target_base_clearance
         )
@@ -1019,7 +1232,10 @@ class VBotSection011Env(NpEnv):
         gate_target_velocity = getattr(
             cfg, "gate_target_direction_velocity_by_stability", False
         )
-        if gate_progress or gate_target_velocity:
+        gate_angular_stability = getattr(
+            cfg, "gate_motion_by_angular_stability", False
+        )
+        if gate_progress or gate_target_velocity or gate_angular_stability:
             upright_score = np.clip(
                 (-projected_gravity[:, 2] - 0.7) / 0.3, 0.0, 1.0
             )
@@ -1027,6 +1243,17 @@ class VBotSection011Env(NpEnv):
                 (base_clearance - 0.25) / 0.25, 0.0, 1.0
             )
             safety_score = np.minimum(upright_score, clearance_score)
+            if gate_angular_stability:
+                angular_xy_for_gate = np.linalg.norm(gyro[:, :2], axis=1)
+                angular_full = float(cfg.motion_angular_xy_full_reward)
+                angular_zero = float(cfg.motion_angular_xy_zero_reward)
+                angular_score = np.clip(
+                    (angular_zero - angular_xy_for_gate)
+                    / max(angular_zero - angular_full, 1e-6),
+                    0.0,
+                    1.0,
+                )
+                safety_score = np.minimum(safety_score, angular_score)
         if gate_progress:
             progress_for_reward = np.where(
                 progress > 0.0, progress * safety_score, progress
@@ -1102,6 +1329,8 @@ class VBotSection011Env(NpEnv):
             + cfg.reward_target_direction_velocity
             * target_direction_velocity_for_reward
             + cfg.reward_skill_goal * skill_success_this_step
+            + cfg.reward_skill_stable_step
+            * info["skill_goal_stable_candidate"]
             + cfg.reward_progress * progress_for_reward
             + cfg.reward_waypoint * reached_waypoint
             + cfg.reward_first_platform * info["first_on_platform"]
@@ -1122,10 +1351,26 @@ class VBotSection011Env(NpEnv):
         )
         if getattr(cfg, "clip_reward_nonnegative", False):
             reward = np.maximum(reward, 0.0)
+        terminal_fall_penalty = float(
+            getattr(cfg, "terminal_fall_penalty", 0.0)
+        )
+        if terminal_fall_penalty:
+            reward = np.where(
+                base_contact,
+                reward - terminal_fall_penalty,
+                reward,
+            )
         return reward.astype(np.float32)
 
     def _sample_spawn_points(self, num_envs: int) -> tuple[np.ndarray, np.ndarray]:
-        """Sample official starts, or local-skill starts for curriculum training."""
+        """Sample official, transition, or local-skill curriculum starts.
+
+        Segment 0 always uses the task's regular spawn range. Segment 1 uses
+        the heightfield range used by the existing two-way curricula. An
+        optional segment 2 covers the flat transition immediately before the
+        heightfield, which lets one policy see the states that connect an
+        official approach trajectory to a locally spawned terrain trajectory.
+        """
         spawn_x = np.random.uniform(*self.spawn_x_range, size=num_envs).astype(
             np.float32
         )
@@ -1139,6 +1384,11 @@ class VBotSection011Env(NpEnv):
         )
         if probabilities is None:
             return np.column_stack((spawn_x, spawn_y)), spawn_z
+
+        if len(probabilities) not in (2, 3):
+            raise ValueError(
+                "curriculum_spawn_probabilities must contain 2 or 3 segments"
+            )
 
         segment = np.random.choice(
             len(probabilities), size=num_envs, p=np.asarray(probabilities)
@@ -1156,6 +1406,19 @@ class VBotSection011Env(NpEnv):
             *self._cfg.curriculum_hfield_y_range, size=int(np.sum(hfield))
         )
         spawn_z[hfield] = self._cfg.curriculum_hfield_spawn_z
+
+        if len(probabilities) == 3:
+            transition = segment == 2
+            transition_count = int(np.sum(transition))
+            spawn_x[transition] = np.random.uniform(
+                *self._cfg.curriculum_transition_x_range,
+                size=transition_count,
+            )
+            spawn_y[transition] = np.random.uniform(
+                *self._cfg.curriculum_transition_y_range,
+                size=transition_count,
+            )
+            spawn_z[transition] = self._cfg.curriculum_transition_spawn_z
 
         return np.column_stack((spawn_x, spawn_y)), spawn_z
 
@@ -1271,41 +1534,21 @@ class VBotSection011Env(NpEnv):
         navigation_target = self._get_navigation_target(
             robot_position, target_position
         )
-        navigation_error = navigation_target - robot_position
-        speed_limit = float(getattr(self._cfg, "navigation_speed_limit", 1.0))
-        desired_vel_xy = np.clip(
-            navigation_error, -speed_limit, speed_limit
+        (
+            navigation_error,
+            heading_to_movement,
+            velocity_commands,
+        ) = self._compute_navigation_commands(
+            robot_position, robot_heading, navigation_target, reached_all
         )
-        desired_vel_xy = np.where(reached_all[:, np.newaxis], 0.0, desired_vel_xy)
-        
+        desired_vel_xy = velocity_commands[:, :2]
+
         base_lin_vel_xy = base_lin_vel[:, :2]
         self._update_heading_arrows(data, root_pos, desired_vel_xy, base_lin_vel_xy)
-        
+
         heading_diff = target_heading - robot_heading
         heading_diff = np.where(heading_diff > np.pi, heading_diff - 2*np.pi, heading_diff)
         heading_diff = np.where(heading_diff < -np.pi, heading_diff + 2*np.pi, heading_diff)
-        
-        # ===== 与reset一致：角速度跟踪运动方向 =====
-        # 计算期望的运动方向（从update_state中复制）
-        desired_heading = np.arctan2(navigation_error[:, 1], navigation_error[:, 0])
-        heading_to_movement = desired_heading - robot_heading
-        heading_to_movement = np.where(heading_to_movement > np.pi, heading_to_movement - 2*np.pi, heading_to_movement)
-        heading_to_movement = np.where(heading_to_movement < -np.pi, heading_to_movement + 2*np.pi, heading_to_movement)
-        desired_yaw_rate = np.clip(heading_to_movement * 1.0, -1.0, 1.0)
-        
-        # 添加死区，与update_state保持一致
-        deadband_yaw = np.deg2rad(8)
-        desired_yaw_rate = np.where(np.abs(heading_to_movement) < deadband_yaw, 0.0, desired_yaw_rate)
-        
-        desired_yaw_rate = np.where(reached_all, 0.0, desired_yaw_rate)
-        desired_vel_xy = np.where(reached_all[:, np.newaxis], 0.0, desired_vel_xy)
-        
-        if desired_yaw_rate.ndim > 1:
-            desired_yaw_rate = desired_yaw_rate.flatten()
-        
-        velocity_commands = np.concatenate(
-            [desired_vel_xy, desired_yaw_rate[:, np.newaxis]], axis=-1
-        )
         
         # 归一化观测
         policy_lin_vel, policy_commands = self._get_policy_frame_motion(
@@ -1397,6 +1640,8 @@ class VBotSection011Env(NpEnv):
             "stable_success_this_step": np.zeros(num_envs, dtype=bool),
             "skill_success": np.zeros(num_envs, dtype=bool),
             "skill_success_this_step": np.zeros(num_envs, dtype=bool),
+            "skill_goal_hold_steps": np.zeros(num_envs, dtype=np.int32),
+            "skill_goal_stable_candidate": np.zeros(num_envs, dtype=bool),
             "feet_air_time": np.zeros(
                 (num_envs, self.num_foot_check), dtype=np.float32
             ),
