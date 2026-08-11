@@ -963,6 +963,16 @@ class VBotSection011RoughEntryStage10EnvCfg(
     skill_goal_y: float | None = -1.2
 
 
+@registry.envcfg("vbot_locomotion_section011_rough_entry_stage11")
+@dataclass
+class VBotSection011RoughEntryStage11EnvCfg(
+    VBotSection011RoughEntryStage10EnvCfg
+):
+    """Reach the first official rough-corridor gate at y=-1.1."""
+
+    skill_goal_y: float | None = -1.1
+
+
 @registry.envcfg("vbot_locomotion_section011_rough_entry_stage0")
 @dataclass
 class VBotSection011RoughEntryStage0EnvCfg(
