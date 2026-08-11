@@ -91,6 +91,8 @@ def generate_repeating_array(num_period, num_reset, period_counter):
 @registry.env("vbot_locomotion_section011_full_route_scale17to2025", "np")
 @registry.env("vbot_locomotion_section011_full_route_scale17to205", "np")
 @registry.env("vbot_locomotion_section011_full_route_scale17to20_early", "np")
+@registry.env("vbot_locomotion_section011_full_route_angular_safe", "np")
+@registry.env("vbot_locomotion_section011_full_route_angular_safe_forward06", "np")
 @registry.env("vbot_locomotion_section011_approach_stage0", "np")
 @registry.env("vbot_locomotion_section011_approach", "np")
 @registry.env("vbot_locomotion_section011_integrated_stage0_90", "np")
@@ -126,6 +128,12 @@ def generate_repeating_array(num_period, num_reset, period_counter):
 )
 @registry.env("vbot_locomotion_section011_integrated_forward06_no_skill", "np")
 @registry.env(
+    "vbot_locomotion_section011_integrated_angular_forward06_no_skill", "np"
+)
+@registry.env(
+    "vbot_locomotion_section011_rough_only_angular_forward06_no_skill", "np"
+)
+@registry.env(
     "vbot_locomotion_section011_integrated_gate100_stable_forward06", "np"
 )
 @registry.env(
@@ -153,6 +161,82 @@ def generate_repeating_array(num_period, num_reset, period_counter):
 )
 @registry.env(
     "vbot_locomotion_section011_integrated_gate095_dense_angular_safe_forward06",
+    "np",
+)
+@registry.env("vbot_locomotion_section011_rough080_angular_forward06", "np")
+@registry.env("vbot_locomotion_section011_rough075_angular_forward06", "np")
+@registry.env("vbot_locomotion_section011_rough080_dense_angular_forward06", "np")
+@registry.env("vbot_locomotion_section011_rough080_hold03_angular_forward06", "np")
+@registry.env("vbot_locomotion_section011_rough065_angular_forward06", "np")
+@registry.env("vbot_locomotion_section011_rough060_angular_forward06", "np")
+@registry.env("vbot_locomotion_section011_rough050_angular_forward06", "np")
+@registry.env("vbot_locomotion_section011_rough040_angular_forward06", "np")
+@registry.env("vbot_locomotion_section011_rough030_angular_forward06", "np")
+@registry.env("vbot_locomotion_section011_rough025_angular_forward06", "np")
+@registry.env("vbot_locomotion_section011_rough020_angular_forward06", "np")
+@registry.env("vbot_locomotion_section011_rough020_hold03_angular_forward06", "np")
+@registry.env(
+    "vbot_locomotion_section011_rough020_hold03_dense_angular_forward06", "np"
+)
+@registry.env(
+    "vbot_locomotion_section011_rough020_hold03_dense5_angular_forward06", "np"
+)
+@registry.env(
+    "vbot_locomotion_section011_rough020_hold03_stop_angular_forward06", "np"
+)
+@registry.env(
+    "vbot_locomotion_section011_rough020_hold03_stop05_angular_forward06", "np"
+)
+@registry.env(
+    "vbot_locomotion_section011_rough020_hold03_stop10_angular_forward06", "np"
+)
+@registry.env(
+    "vbot_locomotion_section011_rough020_hold03_stop15_angular_forward06", "np"
+)
+@registry.env("vbot_locomotion_section011_rough020_stop15_angular_forward06", "np")
+@registry.env(
+    "vbot_locomotion_section011_rough020_hold03_dense_stop15_angular_forward06",
+    "np",
+)
+@registry.env(
+    "vbot_locomotion_section011_rough020_hold03_dense5_stop15_angular_forward06",
+    "np",
+)
+@registry.env(
+    "vbot_locomotion_section011_rough020_hold03_dense_stop_angular_forward06",
+    "np",
+)
+@registry.env(
+    "vbot_locomotion_section011_post_second_000_angular_forward06", "np"
+)
+@registry.env(
+    "vbot_locomotion_section011_post_second_010_angular_forward06", "np"
+)
+@registry.env(
+    "vbot_locomotion_section011_post_second_030_angular_forward06", "np"
+)
+@registry.env(
+    "vbot_locomotion_section011_post_second_050_angular_forward06", "np"
+)
+@registry.env(
+    "vbot_locomotion_section011_post_second_080_angular_forward06", "np"
+)
+@registry.env(
+    "vbot_locomotion_section011_post_second_100_angular_forward06", "np"
+)
+@registry.env("vbot_locomotion_section011_mid_bridge_000_angular_forward06", "np")
+@registry.env("vbot_locomotion_section011_early_bridge_000_angular_forward06", "np")
+@registry.env("vbot_locomotion_section011_early_bridge_m045_angular_forward06", "np")
+@registry.env("vbot_locomotion_section011_handoff_m045_angular_forward06", "np")
+@registry.env(
+    "vbot_locomotion_section011_handoff_healthy_m045_angular_forward06", "np"
+)
+@registry.env(
+    "vbot_locomotion_section011_handoff_healthy_m045_bootstrap_angular_forward06",
+    "np",
+)
+@registry.env(
+    "vbot_locomotion_section011_handoff_healthy_test_m045_bootstrap_angular_forward06",
     "np",
 )
 @registry.env("vbot_locomotion_section011_integrated_gate100_hold10_70", "np")
@@ -210,6 +294,38 @@ class VBotSection011Env(NpEnv):
         
         self._init_dof_pos = self._model.compute_init_dof_pos()
         self._init_dof_vel = np.zeros((self._model.num_dof_vel,), dtype=np.float32)
+
+        self._handoff_dof_pos = None
+        self._handoff_dof_vel = None
+        self._handoff_actions = None
+        handoff_state_file = getattr(cfg, "handoff_state_file", None)
+        if handoff_state_file:
+            with np.load(handoff_state_file, allow_pickle=False) as handoff_states:
+                self._handoff_dof_pos = np.asarray(
+                    handoff_states["dof_pos"], dtype=np.float32
+                )
+                self._handoff_dof_vel = np.asarray(
+                    handoff_states["dof_vel"], dtype=np.float32
+                )
+                self._handoff_actions = np.asarray(
+                    handoff_states["current_actions"], dtype=np.float32
+                )
+            sample_count = self._handoff_dof_pos.shape[0]
+            expected_shapes = (
+                (sample_count, self._model.num_dof_pos),
+                (sample_count, self._model.num_dof_vel),
+                (sample_count, self._model.num_actuators),
+            )
+            actual_shapes = (
+                self._handoff_dof_pos.shape,
+                self._handoff_dof_vel.shape,
+                self._handoff_actions.shape,
+            )
+            if sample_count == 0 or actual_shapes != expected_shapes:
+                raise ValueError(
+                    "invalid handoff state dataset shapes: "
+                    f"expected {expected_shapes}, got {actual_shapes}"
+                )
         
         # 查找target_marker的DOF索引
         self._find_target_marker_dof_indices()
@@ -263,6 +379,8 @@ class VBotSection011Env(NpEnv):
         self.episode_max_y = float("-inf")
         self.all_time_max_y = float("-inf")
         self.all_time_max_waypoints = 0
+        self.all_time_max_skill_goal_hold_steps = 0
+        self.skill_goal_stable_candidate_steps = 0
         self.fall_y_bin_edges = np.asarray(
             [-np.inf, -1.7, -1.5, -1.3, -1.1, -0.9, -0.6, 1.2, np.inf],
             dtype=np.float32,
@@ -743,6 +861,12 @@ class VBotSection011Env(NpEnv):
             ),
             "all_time_max_y": self.all_time_max_y,
             "all_time_max_waypoints": self.all_time_max_waypoints,
+            "all_time_max_skill_goal_hold_steps": (
+                self.all_time_max_skill_goal_hold_steps
+            ),
+            "skill_goal_stable_candidate_steps": (
+                self.skill_goal_stable_candidate_steps
+            ),
             "mean_forward_progress": self.episode_forward_progress_sum / denominator,
             "waypoint_episode_histogram": self.waypoint_episode_histogram.tolist(),
             "waypoint_crossing_counts": self.waypoint_crossing_counts.tolist(),
@@ -918,6 +1042,18 @@ class VBotSection011Env(NpEnv):
         ) = self._compute_navigation_commands(
             robot_position, robot_heading, navigation_target, reached_all
         )
+        skill_goal_y = getattr(cfg, "skill_goal_y", None)
+        if (
+            getattr(cfg, "stop_command_at_skill_goal", False)
+            and skill_goal_y is not None
+        ):
+            stop_threshold_y = skill_goal_y - float(
+                getattr(cfg, "skill_goal_stop_lead_y", 0.0)
+            )
+            stop_at_skill_goal = root_pos[:, 1] >= stop_threshold_y
+            velocity_commands = np.where(
+                stop_at_skill_goal[:, None], 0.0, velocity_commands
+            )
         desired_vel_xy = velocity_commands[:, :2]
         
         # 归一化观测
@@ -1190,6 +1326,13 @@ class VBotSection011Env(NpEnv):
                 info["skill_goal_hold_steps"] + 1,
                 0,
             )
+            self.skill_goal_stable_candidate_steps += int(
+                np.count_nonzero(stable_crossing)
+            )
+            self.all_time_max_skill_goal_hold_steps = max(
+                self.all_time_max_skill_goal_hold_steps,
+                int(np.max(info["skill_goal_hold_steps"])),
+            )
             required_hold_steps = max(
                 1, int(round(cfg.skill_goal_hold_seconds / cfg.ctrl_dt))
             )
@@ -1424,15 +1567,28 @@ class VBotSection011Env(NpEnv):
 
     def reset(self, data: mtx.SceneData, done: np.ndarray = None) -> tuple[np.ndarray, dict]:
         num_envs = data.shape[0]
-        
-        robot_init_xy, terrain_heights = self._sample_spawn_points(num_envs)
-        robot_init_xyz = np.column_stack([robot_init_xy, terrain_heights])
-        
-        dof_pos = np.tile(self._init_dof_pos, (num_envs, 1))
-        dof_vel = np.tile(self._init_dof_vel, (num_envs, 1))
-        
-        # 设置 base 的 XYZ位置（DOF 3-5）
-        dof_pos[:, 3:6] = robot_init_xyz  # [x, y, z] 随机生成的位置
+
+        use_handoff_states = self._handoff_dof_pos is not None
+        if use_handoff_states:
+            sample_indices = np.random.randint(
+                0, self._handoff_dof_pos.shape[0], size=num_envs
+            )
+            dof_pos = self._handoff_dof_pos[sample_indices].copy()
+            dof_vel = self._handoff_dof_vel[sample_indices].copy()
+            initial_actions = self._handoff_actions[sample_indices].copy()
+            robot_init_xyz = dof_pos[:, 3:6].copy()
+            robot_init_xy = robot_init_xyz[:, :2]
+        else:
+            robot_init_xy, terrain_heights = self._sample_spawn_points(num_envs)
+            robot_init_xyz = np.column_stack([robot_init_xy, terrain_heights])
+            dof_pos = np.tile(self._init_dof_pos, (num_envs, 1))
+            dof_vel = np.tile(self._init_dof_vel, (num_envs, 1))
+            initial_actions = np.zeros(
+                (num_envs, self._num_action), dtype=np.float32
+            )
+
+            # 设置 base 的 XYZ位置（DOF 3-5）
+            dof_pos[:, 3:6] = robot_init_xyz
         
         # 最终目标固定为平台中心，不再叠加出生点偏移。
         target_positions = np.repeat(self.final_target_xy[None, :], num_envs, axis=0)
@@ -1465,12 +1621,15 @@ class VBotSection011Env(NpEnv):
             initial_heading_target[:, 1] - robot_init_xy[:, 1],
             initial_heading_target[:, 0] - robot_init_xy[:, 0],
         ).astype(np.float32)
-        robot_yaw = robot_yaw_center + np.random.uniform(
-            -self.initial_yaw_noise, self.initial_yaw_noise, size=num_envs
-        ).astype(np.float32)
-        dof_pos[:, 6:10] = np.column_stack([
-            np.zeros(num_envs), np.zeros(num_envs), np.sin(0.5 * robot_yaw), np.cos(0.5 * robot_yaw)
-        ]).astype(np.float32)
+        if use_handoff_states:
+            robot_yaw = self._get_heading_from_quat(dof_pos[:, 6:10])
+        else:
+            robot_yaw = robot_yaw_center + np.random.uniform(
+                -self.initial_yaw_noise, self.initial_yaw_noise, size=num_envs
+            ).astype(np.float32)
+            dof_pos[:, 6:10] = np.column_stack([
+                np.zeros(num_envs), np.zeros(num_envs), np.sin(0.5 * robot_yaw), np.cos(0.5 * robot_yaw)
+            ]).astype(np.float32)
         
         # 归一化base的四元数（DOF 6-9）
         for env_idx in range(num_envs):
@@ -1559,7 +1718,7 @@ class VBotSection011Env(NpEnv):
         noisy_joint_angle = joint_pos_rel * self._cfg.normalization.dof_pos
         noisy_joint_vel = joint_vel * self._cfg.normalization.dof_vel
         command_normalized = policy_commands * self.commands_scale
-        last_actions = np.zeros((num_envs, self._num_action), dtype=np.float32)
+        last_actions = initial_actions.copy()
         
         # 任务相关观测
         if getattr(self._cfg, "observe_route_target", False):
@@ -1611,10 +1770,10 @@ class VBotSection011Env(NpEnv):
         
         info = {
             "pose_commands": pose_commands,
-            "last_actions": np.zeros((num_envs, self._num_action), dtype=np.float32),
+            "last_actions": initial_actions.copy(),
             "steps": np.zeros(num_envs, dtype=np.int32),
-            "current_actions": np.zeros((num_envs, self._num_action), dtype=np.float32),
-            "filtered_actions": np.zeros((num_envs, self._num_action), dtype=np.float32),
+            "current_actions": initial_actions.copy(),
+            "filtered_actions": initial_actions.copy(),
             "ever_reached": np.zeros(num_envs, dtype=bool),
             "min_distance": distance_to_target.copy(),  # 统一使用min_distance机制
             "previous_distance": distance_to_target.astype(np.float32),

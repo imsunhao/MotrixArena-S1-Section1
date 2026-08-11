@@ -75,6 +75,11 @@ _FINAL_ACTION_SCALE = flags.DEFINE_float(
 _ROUGH_BLEND_STEPS = flags.DEFINE_integer(
     "rough-blend-steps", 0, "Linearly blend base into rough actions over N steps"
 )
+_ROUGH_MAX_ALPHA = flags.DEFINE_float(
+    "rough-max-alpha",
+    1.0,
+    "Maximum persistent rough-policy contribution after blending",
+)
 _SLOPE_BLEND_STEPS = flags.DEFINE_integer(
     "slope-blend-steps", 0, "Linearly blend rough into slope actions over N steps"
 )
@@ -88,6 +93,11 @@ _MAX_CONTROL_STEPS = flags.DEFINE_integer(
 )
 _SEED = flags.DEFINE_integer("seed", 2026, "Evaluation random seed")
 _SIM_BACKEND = flags.DEFINE_string("sim-backend", None, "Simulation backend")
+_BODY_FORWARD_SPEED = flags.DEFINE_float(
+    "body-forward-speed",
+    None,
+    "Command body-forward motion at this speed while yaw steers to waypoints",
+)
 
 
 def _load_agent(trainer, env, rlcfg, policy_path):
@@ -124,6 +134,8 @@ def main(argv):
         _FINAL_BLEND_STEPS.value,
     ) < 0:
         raise app.UsageError("policy blend steps must be non-negative")
+    if not 0.0 <= _ROUGH_MAX_ALPHA.value <= 1.0:
+        raise app.UsageError("--rough-max-alpha must be in [0, 1]")
 
     config.jax.backend = "jax"
     trainer = ppo.Trainer(
@@ -136,6 +148,10 @@ def main(argv):
     raw_env = env_registry.make(
         _ENV.value, sim_backend=_SIM_BACKEND.value, num_envs=_NUM_ENVS.value
     )
+    if _BODY_FORWARD_SPEED.present:
+        if _BODY_FORWARD_SPEED.value <= 0:
+            raise app.UsageError("--body-forward-speed must be positive")
+        raw_env._cfg.navigation_body_forward_speed = _BODY_FORWARD_SPEED.value
     env_action_scale = float(raw_env._cfg.control_config.action_scale)
     base_action_scale = (
         _BASE_ACTION_SCALE.value
@@ -180,6 +196,11 @@ def main(argv):
         if _FINAL_POLICY.value
         else None
     )
+    # skrl/JAX agent construction can touch process-global model state. Reload
+    # the base checkpoint last so episodes that have not switched specialists
+    # remain bit-for-bit equivalent to single-policy evaluation.
+    base_agent.load(_BASE_POLICY.value)
+    base_agent.set_running_mode("eval")
 
     obs, _ = env.reset()
     stages = np.zeros(_NUM_ENVS.value, dtype=np.int8)
@@ -222,22 +243,30 @@ def main(argv):
         base_actions = _mean_actions(base_agent, obs) * (
             base_action_scale / env_action_scale
         )
-        rough_actions = _mean_actions(rough_agent, obs) * (
-            rough_action_scale / env_action_scale
-        )
-        if _ROUGH_BLEND_STEPS.value:
-            rough_alpha = np.clip(
-                (stage_ages + 1) / _ROUGH_BLEND_STEPS.value, 0.0, 1.0
-            )
-            blended_rough_actions = base_actions + jnp.asarray(rough_alpha)[:, None] * (
-                rough_actions - base_actions
-            )
-        else:
-            blended_rough_actions = rough_actions
-        actions = jnp.where(
-            jnp.asarray(stages == 1)[:, None], blended_rough_actions, base_actions
-        )
+        actions = base_actions
+        rough_actions = base_actions
+        rough_needed = np.any(stages == 1)
         if slope_agent is not None:
+            rough_needed = np.logical_or(rough_needed, np.any(stages == 3))
+        if rough_needed:
+            rough_actions = _mean_actions(rough_agent, obs) * (
+                rough_action_scale / env_action_scale
+            )
+            if _ROUGH_BLEND_STEPS.value:
+                rough_alpha = np.clip(
+                    (stage_ages + 1) / _ROUGH_BLEND_STEPS.value, 0.0, 1.0
+                ) * _ROUGH_MAX_ALPHA.value
+                blended_rough_actions = base_actions + jnp.asarray(rough_alpha)[
+                    :, None
+                ] * (rough_actions - base_actions)
+            else:
+                blended_rough_actions = base_actions + _ROUGH_MAX_ALPHA.value * (
+                    rough_actions - base_actions
+                )
+            actions = jnp.where(
+                jnp.asarray(stages == 1)[:, None], blended_rough_actions, actions
+            )
+        if slope_agent is not None and np.any(stages == 3):
             slope_actions = _mean_actions(slope_agent, obs) * (
                 slope_action_scale / env_action_scale
             )
@@ -251,7 +280,7 @@ def main(argv):
             actions = jnp.where(
                 jnp.asarray(stages == 3)[:, None], slope_actions, actions
             )
-            if final_agent is not None:
+            if final_agent is not None and np.any(stages == 4):
                 final_actions = _mean_actions(final_agent, obs) * (
                     final_action_scale / env_action_scale
                 )
@@ -295,6 +324,7 @@ def main(argv):
             "slope_action_scale": slope_action_scale,
             "final_action_scale": final_action_scale,
             "rough_blend_steps": _ROUGH_BLEND_STEPS.value,
+            "rough_max_alpha": _ROUGH_MAX_ALPHA.value,
             "slope_blend_steps": _SLOPE_BLEND_STEPS.value,
             "final_blend_steps": _FINAL_BLEND_STEPS.value,
             "seed": _SEED.value,

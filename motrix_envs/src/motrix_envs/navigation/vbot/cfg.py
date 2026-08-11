@@ -316,6 +316,7 @@ class VBotSection011EnvCfg(VBotStairsEnvCfg):
     # 从起跑线全宽随机出生，目标固定为 2026 平台中心。
     spawn_x_range: tuple[float, float] = (-0.5, 0.5)
     spawn_y_range: tuple[float, float] = (-2.9, -2.0)
+    handoff_state_file: str | None = None
     target_xy: tuple[float, float] = (0.0, 7.8)
     initial_yaw_noise: float = 0.15
 
@@ -352,6 +353,8 @@ class VBotSection011EnvCfg(VBotStairsEnvCfg):
     skill_goal_upright_cos_min: float = 0.85
     skill_goal_base_clearance_min: float = 0.35
     skill_goal_angular_xy_max: float = 1.5
+    stop_command_at_skill_goal: bool = False
+    skill_goal_stop_lead_y: float = 0.0
     gate_motion_by_angular_stability: bool = False
     motion_angular_xy_full_reward: float = 0.5
     motion_angular_xy_zero_reward: float = 3.0
@@ -1221,6 +1224,28 @@ class VBotSection011FullRouteScale17To20EarlyEnvCfg(
     terrain_action_scale_blend_y: tuple[float, float] = (-1.9, -1.6)
 
 
+@registry.envcfg("vbot_locomotion_section011_full_route_angular_safe")
+@dataclass
+class VBotSection011FullRouteAngularSafeEnvCfg(
+    VBotSection011FullRouteScale17To20EnvCfg
+):
+    """Train the complete route from scratch with angular-safe dense motion."""
+
+    gate_progress_by_stability: bool = True
+    gate_motion_by_angular_stability: bool = True
+    terminal_fall_penalty: float = 10.0
+
+
+@registry.envcfg("vbot_locomotion_section011_full_route_angular_safe_forward06")
+@dataclass
+class VBotSection011FullRouteAngularSafeForward06EnvCfg(
+    VBotSection011FullRouteAngularSafeEnvCfg
+):
+    """Use body-forward waypoint commands for complete-route training."""
+
+    navigation_body_forward_speed: float | None = 0.6
+
+
 @registry.envcfg("vbot_locomotion_section011_approach_stage0")
 @dataclass
 class VBotSection011ApproachStage0EnvCfg(
@@ -1445,6 +1470,32 @@ class VBotSection011IntegratedForward06NoSkillEnvCfg(
 
 
 @registry.envcfg(
+    "vbot_locomotion_section011_integrated_angular_forward06_no_skill"
+)
+@dataclass
+class VBotSection011IntegratedAngularForward06NoSkillEnvCfg(
+    VBotSection011IntegratedForward06NoSkillEnvCfg
+):
+    """Train mixed official/transition/rough starts with dense safe motion."""
+
+    gate_progress_by_stability: bool = True
+    gate_motion_by_angular_stability: bool = True
+    terminal_fall_penalty: float = 10.0
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_rough_only_angular_forward06_no_skill"
+)
+@dataclass
+class VBotSection011RoughOnlyAngularForward06NoSkillEnvCfg(
+    VBotSection011IntegratedAngularForward06NoSkillEnvCfg
+):
+    """Learn the same dense gait exclusively from rough-corridor starts."""
+
+    curriculum_spawn_probabilities: tuple[float, ...] = (0.0, 1.0)
+
+
+@registry.envcfg(
     "vbot_locomotion_section011_integrated_gate100_stable_forward06"
 )
 @dataclass
@@ -1560,6 +1611,428 @@ class VBotSection011IntegratedGate095DenseAngularSafeForward06EnvCfg(
 
     reward_skill_stable_step: float = 2.0
     reward_skill_goal: float = 50.0
+
+
+@registry.envcfg("vbot_locomotion_section011_rough080_angular_forward06")
+@dataclass
+class VBotSection011Rough080AngularForward06EnvCfg(
+    VBotSection011IntegratedGate095AngularSafeForward06EnvCfg
+):
+    """Train a same-policy post-entry skill from rough-corridor starts."""
+
+    curriculum_spawn_probabilities: tuple[float, ...] = (0.0, 1.0)
+    max_episode_seconds: float = 15.0
+    max_episode_steps: int = 1500
+    skill_goal_y: float | None = -0.8
+
+
+@registry.envcfg("vbot_locomotion_section011_rough075_angular_forward06")
+@dataclass
+class VBotSection011Rough075AngularForward06EnvCfg(
+    VBotSection011Rough080AngularForward06EnvCfg
+):
+    """Advance the same-policy post-entry skill by another five centimeters."""
+
+    skill_goal_y: float | None = -0.75
+
+
+@registry.envcfg("vbot_locomotion_section011_rough080_dense_angular_forward06")
+@dataclass
+class VBotSection011Rough080DenseAngularForward06EnvCfg(
+    VBotSection011Rough080AngularForward06EnvCfg
+):
+    """Reward partial stable holds in the same-policy post-entry skill."""
+
+    reward_skill_stable_step: float = 2.0
+    reward_skill_goal: float = 50.0
+
+
+@registry.envcfg("vbot_locomotion_section011_rough080_hold03_angular_forward06")
+@dataclass
+class VBotSection011Rough080Hold03AngularForward06EnvCfg(
+    VBotSection011Rough080AngularForward06EnvCfg
+):
+    """Bootstrap the post-entry skill with a three-step stable hold."""
+
+    skill_goal_hold_seconds: float = 0.03
+
+
+@registry.envcfg("vbot_locomotion_section011_rough065_angular_forward06")
+@dataclass
+class VBotSection011Rough065AngularForward06EnvCfg(
+    VBotSection011Rough075AngularForward06EnvCfg
+):
+    """Advance the post-entry specialist toward the second waypoint."""
+
+    skill_goal_y: float | None = -0.65
+
+
+@registry.envcfg("vbot_locomotion_section011_rough060_angular_forward06")
+@dataclass
+class VBotSection011Rough060AngularForward06EnvCfg(
+    VBotSection011Rough065AngularForward06EnvCfg
+):
+    """Require a controlled crossing of the second waypoint gate."""
+
+    skill_goal_y: float | None = -0.6
+
+
+@registry.envcfg("vbot_locomotion_section011_rough050_angular_forward06")
+@dataclass
+class VBotSection011Rough050AngularForward06EnvCfg(
+    VBotSection011Rough060AngularForward06EnvCfg
+):
+    """Advance ten centimeters beyond the second waypoint."""
+
+    skill_goal_y: float | None = -0.5
+
+
+@registry.envcfg("vbot_locomotion_section011_rough040_angular_forward06")
+@dataclass
+class VBotSection011Rough040AngularForward06EnvCfg(
+    VBotSection011Rough050AngularForward06EnvCfg
+):
+    """Reach the current look-ahead target after the second waypoint."""
+
+    skill_goal_y: float | None = -0.4
+
+
+@registry.envcfg("vbot_locomotion_section011_rough030_angular_forward06")
+@dataclass
+class VBotSection011Rough030AngularForward06EnvCfg(
+    VBotSection011Rough040AngularForward06EnvCfg
+):
+    """Bridge the ten-centimeter gap before probing the deeper heightfield."""
+
+    skill_goal_y: float | None = -0.3
+
+
+@registry.envcfg("vbot_locomotion_section011_rough025_angular_forward06")
+@dataclass
+class VBotSection011Rough025AngularForward06EnvCfg(
+    VBotSection011Rough030AngularForward06EnvCfg
+):
+    """Use a five-centimeter bridge when deeper safe samples are sparse."""
+
+    skill_goal_y: float | None = -0.25
+
+
+@registry.envcfg("vbot_locomotion_section011_rough020_angular_forward06")
+@dataclass
+class VBotSection011Rough020AngularForward06EnvCfg(
+    VBotSection011Rough025AngularForward06EnvCfg
+):
+    """Probe twenty centimeters deeper into the heightfield."""
+
+    skill_goal_y: float | None = -0.2
+
+
+@registry.envcfg("vbot_locomotion_section011_rough020_hold03_angular_forward06")
+@dataclass
+class VBotSection011Rough020Hold03AngularForward06EnvCfg(
+    VBotSection011Rough020AngularForward06EnvCfg
+):
+    """Bootstrap the -0.20 m gate with a three-control-step safe hold."""
+
+    skill_goal_hold_seconds: float = 0.03
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_rough020_hold03_dense_angular_forward06"
+)
+@dataclass
+class VBotSection011Rough020Hold03DenseAngularForward06EnvCfg(
+    VBotSection011Rough020Hold03AngularForward06EnvCfg
+):
+    """Credit each safe partial-hold step while bootstrapping the -0.20 m gate."""
+
+    reward_skill_stable_step: float = 2.0
+    reward_skill_goal: float = 50.0
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_rough020_hold03_dense5_angular_forward06"
+)
+@dataclass
+class VBotSection011Rough020Hold03Dense5AngularForward06EnvCfg(
+    VBotSection011Rough020Hold03AngularForward06EnvCfg
+):
+    """Emphasize partial safe holds while reducing the terminal jackpot."""
+
+    reward_skill_stable_step: float = 5.0
+    reward_skill_goal: float = 20.0
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_rough020_hold03_stop_angular_forward06"
+)
+@dataclass
+class VBotSection011Rough020Hold03StopAngularForward06EnvCfg(
+    VBotSection011Rough020Hold03AngularForward06EnvCfg
+):
+    """Stop the local velocity command after crossing the bootstrap gate."""
+
+    stop_command_at_skill_goal: bool = True
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_rough020_hold03_stop05_angular_forward06"
+)
+@dataclass
+class VBotSection011Rough020Hold03Stop05AngularForward06EnvCfg(
+    VBotSection011Rough020Hold03StopAngularForward06EnvCfg
+):
+    """Begin braking five centimeters before the local safe-hold gate."""
+
+    skill_goal_stop_lead_y: float = 0.05
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_rough020_hold03_stop10_angular_forward06"
+)
+@dataclass
+class VBotSection011Rough020Hold03Stop10AngularForward06EnvCfg(
+    VBotSection011Rough020Hold03StopAngularForward06EnvCfg
+):
+    """Begin braking ten centimeters before the local safe-hold gate."""
+
+    skill_goal_stop_lead_y: float = 0.1
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_rough020_hold03_stop15_angular_forward06"
+)
+@dataclass
+class VBotSection011Rough020Hold03Stop15AngularForward06EnvCfg(
+    VBotSection011Rough020Hold03StopAngularForward06EnvCfg
+):
+    """Begin braking fifteen centimeters before the local safe-hold gate."""
+
+    skill_goal_stop_lead_y: float = 0.15
+
+
+@registry.envcfg("vbot_locomotion_section011_rough020_stop15_angular_forward06")
+@dataclass
+class VBotSection011Rough020Stop15AngularForward06EnvCfg(
+    VBotSection011Rough020AngularForward06EnvCfg
+):
+    """Validate the early-braking controller against the five-step safe hold."""
+
+    stop_command_at_skill_goal: bool = True
+    skill_goal_stop_lead_y: float = 0.15
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_rough020_hold03_dense_stop15_angular_forward06"
+)
+@dataclass
+class VBotSection011Rough020Hold03DenseStop15AngularForward06EnvCfg(
+    VBotSection011Rough020Hold03DenseAngularForward06EnvCfg
+):
+    """Reward partial holds while braking fifteen centimeters before the gate."""
+
+    stop_command_at_skill_goal: bool = True
+    skill_goal_stop_lead_y: float = 0.15
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_rough020_hold03_dense5_stop15_angular_forward06"
+)
+@dataclass
+class VBotSection011Rough020Hold03Dense5Stop15AngularForward06EnvCfg(
+    VBotSection011Rough020Hold03Dense5AngularForward06EnvCfg
+):
+    """Use stronger partial-hold credit with the early-braking controller."""
+
+    stop_command_at_skill_goal: bool = True
+    skill_goal_stop_lead_y: float = 0.15
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_rough020_hold03_dense_stop_angular_forward06"
+)
+@dataclass
+class VBotSection011Rough020Hold03DenseStopAngularForward06EnvCfg(
+    VBotSection011Rough020Hold03DenseAngularForward06EnvCfg
+):
+    """Learn the post-gate zero-command transition with partial-hold credit."""
+
+    stop_command_at_skill_goal: bool = True
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_post_second_000_angular_forward06"
+)
+@dataclass
+class VBotSection011PostSecond000AngularForward06EnvCfg(
+    VBotSection011Rough080AngularForward06EnvCfg
+):
+    """Train the post-second-waypoint skill from nearby local terrain states."""
+
+    curriculum_spawn_probabilities: tuple[float, ...] = (0.0, 1.0)
+    curriculum_hfield_x_range: tuple[float, float] = (0.5, 0.7)
+    curriculum_hfield_y_range: tuple[float, float] = (-0.45, -0.25)
+    curriculum_hfield_spawn_z: float = 0.65
+    skill_goal_y: float | None = 0.0
+    max_episode_seconds: float = 15.0
+    max_episode_steps: int = 1500
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_post_second_010_angular_forward06"
+)
+@dataclass
+class VBotSection011PostSecond010AngularForward06EnvCfg(
+    VBotSection011PostSecond000AngularForward06EnvCfg
+):
+    """Advance the post-second-waypoint local skill by ten centimeters."""
+
+    skill_goal_y: float | None = 0.1
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_post_second_030_angular_forward06"
+)
+@dataclass
+class VBotSection011PostSecond030AngularForward06EnvCfg(
+    VBotSection011PostSecond010AngularForward06EnvCfg
+):
+    """Advance the post-second-waypoint local skill to y=0.30 m."""
+
+    skill_goal_y: float | None = 0.3
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_post_second_050_angular_forward06"
+)
+@dataclass
+class VBotSection011PostSecond050AngularForward06EnvCfg(
+    VBotSection011PostSecond030AngularForward06EnvCfg
+):
+    """Advance the post-second-waypoint local skill to y=0.50 m."""
+
+    skill_goal_y: float | None = 0.5
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_post_second_080_angular_forward06"
+)
+@dataclass
+class VBotSection011PostSecond080AngularForward06EnvCfg(
+    VBotSection011PostSecond050AngularForward06EnvCfg
+):
+    """Advance the post-second-waypoint local skill to y=0.80 m."""
+
+    skill_goal_y: float | None = 0.8
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_post_second_100_angular_forward06"
+)
+@dataclass
+class VBotSection011PostSecond100AngularForward06EnvCfg(
+    VBotSection011PostSecond080AngularForward06EnvCfg
+):
+    """Advance the post-second-waypoint local skill to y=1.00 m."""
+
+    skill_goal_y: float | None = 1.0
+
+
+@registry.envcfg("vbot_locomotion_section011_mid_bridge_000_angular_forward06")
+@dataclass
+class VBotSection011MidBridge000AngularForward06EnvCfg(
+    VBotSection011PostSecond000AngularForward06EnvCfg
+):
+    """Bridge the state gap between formal arrivals and post-second starts."""
+
+    curriculum_hfield_y_range: tuple[float, float] = (-0.8, -0.6)
+    skill_goal_y: float | None = 0.0
+
+
+@registry.envcfg("vbot_locomotion_section011_early_bridge_000_angular_forward06")
+@dataclass
+class VBotSection011EarlyBridge000AngularForward06EnvCfg(
+    VBotSection011MidBridge000AngularForward06EnvCfg
+):
+    """Start before the repeatable formal-route handoff region."""
+
+    curriculum_hfield_y_range: tuple[float, float] = (-1.0, -0.8)
+
+
+@registry.envcfg("vbot_locomotion_section011_early_bridge_m045_angular_forward06")
+@dataclass
+class VBotSection011EarlyBridgeM045AngularForward06EnvCfg(
+    VBotSection011EarlyBridge000AngularForward06EnvCfg
+):
+    """Learn the repeatable handoff into the post-second specialist."""
+
+    skill_goal_y: float | None = -0.45
+
+
+@registry.envcfg("vbot_locomotion_section011_handoff_m045_angular_forward06")
+@dataclass
+class VBotSection011HandoffM045AngularForward06EnvCfg(
+    VBotSection011EarlyBridgeM045AngularForward06EnvCfg
+):
+    """Train from exact seed-282 states captured at the y=-1.0 handoff."""
+
+    handoff_state_file: str | None = os.path.join(
+        os.path.dirname(__file__),
+        "handoff_states",
+        "seed282_y_m100.npz",
+    )
+
+
+@registry.envcfg("vbot_locomotion_section011_handoff_healthy_m045_angular_forward06")
+@dataclass
+class VBotSection011HandoffHealthyM045AngularForward06EnvCfg(
+    VBotSection011HandoffM045AngularForward06EnvCfg
+):
+    """Replay only upright, high-clearance, low-angular-rate handoffs."""
+
+    handoff_state_file: str | None = os.path.join(
+        os.path.dirname(__file__),
+        "handoff_states",
+        "seed282_y_m100_healthy.npz",
+    )
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_handoff_healthy_m045_bootstrap_angular_forward06"
+)
+@dataclass
+class VBotSection011HandoffHealthyM045BootstrapAngularForward06EnvCfg(
+    VBotSection011HandoffHealthyM045AngularForward06EnvCfg
+):
+    """Bootstrap recoverable handoffs before restoring the strict safety gate."""
+
+    skill_goal_hold_seconds: float = 0.03
+    skill_goal_upright_cos_min: float = 0.7
+    skill_goal_base_clearance_min: float = 0.2
+    skill_goal_angular_xy_max: float = 3.0
+    reward_skill_stable_step: float = 2.0
+    reward_skill_goal: float = 50.0
+    handoff_state_file: str | None = os.path.join(
+        os.path.dirname(__file__),
+        "handoff_states",
+        "seed282_y_m100_healthy_train.npz",
+    )
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_handoff_healthy_test_m045_bootstrap_angular_forward06"
+)
+@dataclass
+class VBotSection011HandoffHealthyTestM045BootstrapAngularForward06EnvCfg(
+    VBotSection011HandoffHealthyM045BootstrapAngularForward06EnvCfg
+):
+    """Hold out seed-2029 handoff states for replay validation."""
+
+    handoff_state_file: str | None = os.path.join(
+        os.path.dirname(__file__),
+        "handoff_states",
+        "seed282_y_m100_healthy_test.npz",
+    )
 
 
 @registry.envcfg("vbot_locomotion_section011_integrated_gate100_hold10_70")
