@@ -508,6 +508,8 @@ class navigation:
     @rlcfg("vbot_locomotion_section011_handoff_seed343_m095_m045_bootstrap_test_angular_forward06")
     @rlcfg("vbot_locomotion_section011_handoff_seed343_m095_m025_bootstrap_angular_forward06")
     @rlcfg("vbot_locomotion_section011_handoff_seed343_m095_m025_bootstrap_test_angular_forward06")
+    @rlcfg("vbot_locomotion_section011_handoff_seed343_m095_m010_bootstrap_angular_forward06")
+    @rlcfg("vbot_locomotion_section011_handoff_seed343_m095_m010_bootstrap_test_angular_forward06")
     @rlcfg("vbot_locomotion_section011_handoff_seed343_m095_000_bootstrap_angular_forward06")
     @rlcfg("vbot_locomotion_section011_handoff_seed343_m095_000_bootstrap_test_angular_forward06")
     @rlcfg("vbot_locomotion_section011_integrated_gate100_hold10_70")

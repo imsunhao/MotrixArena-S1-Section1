@@ -351,6 +351,14 @@ def generate_repeating_array(num_period, num_reset, period_counter):
     "np",
 )
 @registry.env(
+    "vbot_locomotion_section011_handoff_seed343_m095_m010_bootstrap_angular_forward06",
+    "np",
+)
+@registry.env(
+    "vbot_locomotion_section011_handoff_seed343_m095_m010_bootstrap_test_angular_forward06",
+    "np",
+)
+@registry.env(
     "vbot_locomotion_section011_handoff_seed343_m095_000_bootstrap_angular_forward06",
     "np",
 )

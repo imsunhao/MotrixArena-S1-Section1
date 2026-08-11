@@ -2476,11 +2476,39 @@ class VBotSection011HandoffSeed343M095M025BootstrapTestAngularForward06EnvCfg(
 
 
 @registry.envcfg(
+    "vbot_locomotion_section011_handoff_seed343_m095_m010_bootstrap_angular_forward06"
+)
+@dataclass
+class VBotSection011HandoffSeed343M095M010BootstrapAngularForward06EnvCfg(
+    VBotSection011HandoffSeed343M095M025BootstrapAngularForward06EnvCfg
+):
+    """Add a y=-0.10 bridge before crossing the second waypoint."""
+
+    skill_goal_y: float | None = -0.1
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_handoff_seed343_m095_m010_bootstrap_test_angular_forward06"
+)
+@dataclass
+class VBotSection011HandoffSeed343M095M010BootstrapTestAngularForward06EnvCfg(
+    VBotSection011HandoffSeed343M095M010BootstrapAngularForward06EnvCfg
+):
+    """Evaluate the y=-0.10 bridge on held-out handoff states."""
+
+    handoff_state_file: str | None = os.path.join(
+        os.path.dirname(__file__),
+        "handoff_states",
+        "seed343_y_m095_healthy_test.npz",
+    )
+
+
+@registry.envcfg(
     "vbot_locomotion_section011_handoff_seed343_m095_000_bootstrap_angular_forward06"
 )
 @dataclass
 class VBotSection011HandoffSeed343M095000BootstrapAngularForward06EnvCfg(
-    VBotSection011HandoffSeed343M095M025BootstrapAngularForward06EnvCfg
+    VBotSection011HandoffSeed343M095M010BootstrapAngularForward06EnvCfg
 ):
     """Extend the seed343 handoff specialist through the second waypoint."""
 
