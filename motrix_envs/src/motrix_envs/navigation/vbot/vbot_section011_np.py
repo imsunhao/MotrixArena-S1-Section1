@@ -366,6 +366,54 @@ def generate_repeating_array(num_period, num_reset, period_counter):
     "vbot_locomotion_section011_handoff_seed343_m095_000_bootstrap_test_angular_forward06",
     "np",
 )
+@registry.env(
+    "vbot_locomotion_section011_handoff_seed343_m095_p010_bootstrap_angular_forward06",
+    "np",
+)
+@registry.env(
+    "vbot_locomotion_section011_handoff_seed343_m095_p010_bootstrap_test_angular_forward06",
+    "np",
+)
+@registry.env(
+    "vbot_locomotion_section011_handoff_seed343_m095_p030_bootstrap_angular_forward06",
+    "np",
+)
+@registry.env(
+    "vbot_locomotion_section011_handoff_seed343_m095_p030_bootstrap_test_angular_forward06",
+    "np",
+)
+@registry.env(
+    "vbot_locomotion_section011_handoff_seed343_m095_p050_bootstrap_angular_forward06",
+    "np",
+)
+@registry.env(
+    "vbot_locomotion_section011_handoff_seed343_m095_p050_bootstrap_test_angular_forward06",
+    "np",
+)
+@registry.env(
+    "vbot_locomotion_section011_handoff_seed343_m095_p080_bootstrap_angular_forward06",
+    "np",
+)
+@registry.env(
+    "vbot_locomotion_section011_handoff_seed343_m095_p080_bootstrap_test_angular_forward06",
+    "np",
+)
+@registry.env(
+    "vbot_locomotion_section011_handoff_seed343_m095_p100_bootstrap_angular_forward06",
+    "np",
+)
+@registry.env(
+    "vbot_locomotion_section011_handoff_seed343_m095_p100_bootstrap_test_angular_forward06",
+    "np",
+)
+@registry.env(
+    "vbot_locomotion_section011_handoff_seed343_m095_p100_recoverable_bootstrap_angular_forward06",
+    "np",
+)
+@registry.env(
+    "vbot_locomotion_section011_handoff_seed343_m095_p100_recoverable_bootstrap_test_angular_forward06",
+    "np",
+)
 @registry.env("vbot_locomotion_section011_integrated_gate100_hold10_70", "np")
 @registry.env(
     "vbot_locomotion_section011_integrated_gate100_hold10_fall10_70", "np"

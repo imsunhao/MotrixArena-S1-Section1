@@ -2531,6 +2531,178 @@ class VBotSection011HandoffSeed343M095000BootstrapTestAngularForward06EnvCfg(
     )
 
 
+@registry.envcfg(
+    "vbot_locomotion_section011_handoff_seed343_m095_p010_bootstrap_angular_forward06"
+)
+@dataclass
+class VBotSection011HandoffSeed343M095P010BootstrapAngularForward06EnvCfg(
+    VBotSection011HandoffSeed343M095000BootstrapAngularForward06EnvCfg
+):
+    """Continue one seed343 handoff policy beyond y=0 to y=0.10."""
+
+    skill_goal_y: float | None = 0.1
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_handoff_seed343_m095_p010_bootstrap_test_angular_forward06"
+)
+@dataclass
+class VBotSection011HandoffSeed343M095P010BootstrapTestAngularForward06EnvCfg(
+    VBotSection011HandoffSeed343M095P010BootstrapAngularForward06EnvCfg
+):
+    """Evaluate the y=0.10 extension on held-out formal handoff states."""
+
+    handoff_state_file: str | None = os.path.join(
+        os.path.dirname(__file__),
+        "handoff_states",
+        "seed343_y_m095_healthy_test.npz",
+    )
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_handoff_seed343_m095_p030_bootstrap_angular_forward06"
+)
+@dataclass
+class VBotSection011HandoffSeed343M095P030BootstrapAngularForward06EnvCfg(
+    VBotSection011HandoffSeed343M095P010BootstrapAngularForward06EnvCfg
+):
+    """Continue the same formal handoff policy to y=0.30."""
+
+    skill_goal_y: float | None = 0.3
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_handoff_seed343_m095_p030_bootstrap_test_angular_forward06"
+)
+@dataclass
+class VBotSection011HandoffSeed343M095P030BootstrapTestAngularForward06EnvCfg(
+    VBotSection011HandoffSeed343M095P030BootstrapAngularForward06EnvCfg
+):
+    """Evaluate the y=0.30 extension on held-out formal handoff states."""
+
+    handoff_state_file: str | None = os.path.join(
+        os.path.dirname(__file__),
+        "handoff_states",
+        "seed343_y_m095_healthy_test.npz",
+    )
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_handoff_seed343_m095_p050_bootstrap_angular_forward06"
+)
+@dataclass
+class VBotSection011HandoffSeed343M095P050BootstrapAngularForward06EnvCfg(
+    VBotSection011HandoffSeed343M095P030BootstrapAngularForward06EnvCfg
+):
+    """Continue the same formal handoff policy to y=0.50."""
+
+    skill_goal_y: float | None = 0.5
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_handoff_seed343_m095_p050_bootstrap_test_angular_forward06"
+)
+@dataclass
+class VBotSection011HandoffSeed343M095P050BootstrapTestAngularForward06EnvCfg(
+    VBotSection011HandoffSeed343M095P050BootstrapAngularForward06EnvCfg
+):
+    """Evaluate the y=0.50 extension on held-out formal handoff states."""
+
+    handoff_state_file: str | None = os.path.join(
+        os.path.dirname(__file__),
+        "handoff_states",
+        "seed343_y_m095_healthy_test.npz",
+    )
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_handoff_seed343_m095_p080_bootstrap_angular_forward06"
+)
+@dataclass
+class VBotSection011HandoffSeed343M095P080BootstrapAngularForward06EnvCfg(
+    VBotSection011HandoffSeed343M095P050BootstrapAngularForward06EnvCfg
+):
+    """Continue the same formal handoff policy to y=0.80."""
+
+    skill_goal_y: float | None = 0.8
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_handoff_seed343_m095_p080_bootstrap_test_angular_forward06"
+)
+@dataclass
+class VBotSection011HandoffSeed343M095P080BootstrapTestAngularForward06EnvCfg(
+    VBotSection011HandoffSeed343M095P080BootstrapAngularForward06EnvCfg
+):
+    """Evaluate the y=0.80 extension on held-out formal handoff states."""
+
+    handoff_state_file: str | None = os.path.join(
+        os.path.dirname(__file__),
+        "handoff_states",
+        "seed343_y_m095_healthy_test.npz",
+    )
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_handoff_seed343_m095_p100_bootstrap_angular_forward06"
+)
+@dataclass
+class VBotSection011HandoffSeed343M095P100BootstrapAngularForward06EnvCfg(
+    VBotSection011HandoffSeed343M095P080BootstrapAngularForward06EnvCfg
+):
+    """Continue one policy from the formal y=-0.95 handoff through y=1.0."""
+
+    skill_goal_y: float | None = 1.0
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_handoff_seed343_m095_p100_bootstrap_test_angular_forward06"
+)
+@dataclass
+class VBotSection011HandoffSeed343M095P100BootstrapTestAngularForward06EnvCfg(
+    VBotSection011HandoffSeed343M095P100BootstrapAngularForward06EnvCfg
+):
+    """Evaluate the y=1.0 extension on held-out formal handoff states."""
+
+    handoff_state_file: str | None = os.path.join(
+        os.path.dirname(__file__),
+        "handoff_states",
+        "seed343_y_m095_healthy_test.npz",
+    )
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_handoff_seed343_m095_p100_recoverable_bootstrap_angular_forward06"
+)
+@dataclass
+class VBotSection011HandoffSeed343M095P100RecoverableBootstrapAngularForward06EnvCfg(
+    VBotSection011HandoffSeed343M095P100BootstrapAngularForward06EnvCfg
+):
+    """Cover marginal but recoverable states seen at the formal handoff."""
+
+    handoff_state_file: str | None = os.path.join(
+        os.path.dirname(__file__),
+        "handoff_states",
+        "seed343_y_m095_recoverable_train.npz",
+    )
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_handoff_seed343_m095_p100_recoverable_bootstrap_test_angular_forward06"
+)
+@dataclass
+class VBotSection011HandoffSeed343M095P100RecoverableBootstrapTestAngularForward06EnvCfg(
+    VBotSection011HandoffSeed343M095P100RecoverableBootstrapAngularForward06EnvCfg
+):
+    """Validate the recoverable-state extension on a held-out split."""
+
+    handoff_state_file: str | None = os.path.join(
+        os.path.dirname(__file__),
+        "handoff_states",
+        "seed343_y_m095_recoverable_test.npz",
+    )
+
+
 @registry.envcfg("vbot_locomotion_section011_integrated_gate100_hold10_70")
 @dataclass
 class VBotSection011IntegratedGate100Hold1070EnvCfg(
