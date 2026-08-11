@@ -2108,11 +2108,35 @@ class VBotSection011PlatformStandRelaxedHold015AngularForward06EnvCfg(
 
 
 @registry.envcfg(
+    "vbot_locomotion_section011_platform_stand_relaxed_hold018_angular_forward06"
+)
+@dataclass
+class VBotSection011PlatformStandRelaxedHold018AngularForward06EnvCfg(
+    VBotSection011PlatformStandRelaxedHold015AngularForward06EnvCfg
+):
+    """Bridge the relaxed platform curriculum from fifteen to twenty steps."""
+
+    stable_hold_seconds: float = 0.18
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_platform_stand_relaxed_hold019_angular_forward06"
+)
+@dataclass
+class VBotSection011PlatformStandRelaxedHold019AngularForward06EnvCfg(
+    VBotSection011PlatformStandRelaxedHold018AngularForward06EnvCfg
+):
+    """Add a one-step bridge before the twenty-step platform gate."""
+
+    stable_hold_seconds: float = 0.19
+
+
+@registry.envcfg(
     "vbot_locomotion_section011_platform_stand_relaxed_hold020_angular_forward06"
 )
 @dataclass
 class VBotSection011PlatformStandRelaxedHold020AngularForward06EnvCfg(
-    VBotSection011PlatformStandRelaxedHold015AngularForward06EnvCfg
+    VBotSection011PlatformStandRelaxedHold019AngularForward06EnvCfg
 ):
     """Extend the relaxed platform hold to twenty control steps."""
 
@@ -2129,6 +2153,66 @@ class VBotSection011PlatformStandRelaxedHold025AngularForward06EnvCfg(
     """Extend the relaxed platform hold to twenty-five control steps."""
 
     stable_hold_seconds: float = 0.25
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_platform_stand_relaxed_hold030_angular_forward06"
+)
+@dataclass
+class VBotSection011PlatformStandRelaxedHold030AngularForward06EnvCfg(
+    VBotSection011PlatformStandRelaxedHold025AngularForward06EnvCfg
+):
+    """Extend the relaxed platform hold to thirty control steps."""
+
+    stable_hold_seconds: float = 0.3
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_platform_stand_relaxed_hold035_angular_forward06"
+)
+@dataclass
+class VBotSection011PlatformStandRelaxedHold035AngularForward06EnvCfg(
+    VBotSection011PlatformStandRelaxedHold030AngularForward06EnvCfg
+):
+    """Extend the relaxed platform hold to thirty-five control steps."""
+
+    stable_hold_seconds: float = 0.35
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_platform_stand_relaxed_hold040_angular_forward06"
+)
+@dataclass
+class VBotSection011PlatformStandRelaxedHold040AngularForward06EnvCfg(
+    VBotSection011PlatformStandRelaxedHold035AngularForward06EnvCfg
+):
+    """Extend the relaxed platform hold to forty control steps."""
+
+    stable_hold_seconds: float = 0.4
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_platform_stand_relaxed_hold045_angular_forward06"
+)
+@dataclass
+class VBotSection011PlatformStandRelaxedHold045AngularForward06EnvCfg(
+    VBotSection011PlatformStandRelaxedHold040AngularForward06EnvCfg
+):
+    """Extend the relaxed platform hold to forty-five control steps."""
+
+    stable_hold_seconds: float = 0.45
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_platform_stand_relaxed_hold050_angular_forward06"
+)
+@dataclass
+class VBotSection011PlatformStandRelaxedHold050AngularForward06EnvCfg(
+    VBotSection011PlatformStandRelaxedHold045AngularForward06EnvCfg
+):
+    """Complete the relaxed half-second platform-hold curriculum."""
+
+    stable_hold_seconds: float = 0.5
 
 
 @registry.envcfg("vbot_locomotion_section011_mid_bridge_000_angular_forward06")
