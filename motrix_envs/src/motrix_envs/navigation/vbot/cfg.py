@@ -973,6 +973,16 @@ class VBotSection011RoughEntryStage11EnvCfg(
     skill_goal_y: float | None = -1.1
 
 
+@registry.envcfg("vbot_locomotion_section011_rough_entry_stage112")
+@dataclass
+class VBotSection011RoughEntryStage112EnvCfg(
+    VBotSection011RoughEntryStage11EnvCfg
+):
+    """Stabilize trajectories just before the y=-1.1 official gate."""
+
+    skill_goal_y: float | None = -1.12
+
+
 @registry.envcfg("vbot_locomotion_section011_rough_entry_stage0")
 @dataclass
 class VBotSection011RoughEntryStage0EnvCfg(

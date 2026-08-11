@@ -389,6 +389,7 @@ class navigation:
     @rlcfg("vbot_locomotion_section011_rough_entry")
     @rlcfg("vbot_locomotion_section011_rough_entry_stage10")
     @rlcfg("vbot_locomotion_section011_rough_entry_stage11")
+    @rlcfg("vbot_locomotion_section011_rough_entry_stage112")
     @rlcfg("vbot_locomotion_section011_rough_entry_stage0")
     @rlcfg("vbot_locomotion_section011_rough_entry_stage05")
     @rlcfg("vbot_locomotion_section011_rough_entry_near_edge")
