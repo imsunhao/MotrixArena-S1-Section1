@@ -2083,11 +2083,48 @@ class VBotSection011PlatformStandRelaxedHold010AngularForward06EnvCfg(
 
 
 @registry.envcfg(
+    "vbot_locomotion_section011_platform_stand_relaxed_hold012_angular_forward06"
+)
+@dataclass
+class VBotSection011PlatformStandRelaxedHold012AngularForward06EnvCfg(
+    VBotSection011PlatformStandRelaxedHold010AngularForward06EnvCfg
+):
+    """Extend the relaxed platform hold to twelve control steps."""
+
+    stable_hold_seconds: float = 0.12
+    reward_stable_step: float = 10.0
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_platform_stand_relaxed_hold015_angular_forward06"
+)
+@dataclass
+class VBotSection011PlatformStandRelaxedHold015AngularForward06EnvCfg(
+    VBotSection011PlatformStandRelaxedHold012AngularForward06EnvCfg
+):
+    """Extend the relaxed platform hold to fifteen control steps."""
+
+    stable_hold_seconds: float = 0.15
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_platform_stand_relaxed_hold020_angular_forward06"
+)
+@dataclass
+class VBotSection011PlatformStandRelaxedHold020AngularForward06EnvCfg(
+    VBotSection011PlatformStandRelaxedHold015AngularForward06EnvCfg
+):
+    """Extend the relaxed platform hold to twenty control steps."""
+
+    stable_hold_seconds: float = 0.2
+
+
+@registry.envcfg(
     "vbot_locomotion_section011_platform_stand_relaxed_hold025_angular_forward06"
 )
 @dataclass
 class VBotSection011PlatformStandRelaxedHold025AngularForward06EnvCfg(
-    VBotSection011PlatformStandRelaxedHold010AngularForward06EnvCfg
+    VBotSection011PlatformStandRelaxedHold020AngularForward06EnvCfg
 ):
     """Extend the relaxed platform hold to twenty-five control steps."""
 

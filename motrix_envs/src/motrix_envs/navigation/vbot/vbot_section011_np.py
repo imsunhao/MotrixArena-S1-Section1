@@ -244,6 +244,18 @@ def generate_repeating_array(num_period, num_reset, period_counter):
     "np",
 )
 @registry.env(
+    "vbot_locomotion_section011_platform_stand_relaxed_hold012_angular_forward06",
+    "np",
+)
+@registry.env(
+    "vbot_locomotion_section011_platform_stand_relaxed_hold015_angular_forward06",
+    "np",
+)
+@registry.env(
+    "vbot_locomotion_section011_platform_stand_relaxed_hold020_angular_forward06",
+    "np",
+)
+@registry.env(
     "vbot_locomotion_section011_platform_stand_relaxed_hold025_angular_forward06",
     "np",
 )
