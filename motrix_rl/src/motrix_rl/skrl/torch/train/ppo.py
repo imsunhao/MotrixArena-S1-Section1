@@ -155,6 +155,7 @@ class Trainer:
         sim_backend: str = None,
         enable_render: bool = False,
         cfg_override: dict = None,
+        log_dir: str = None,
     ) -> None:
         rlcfg = registry.default_rl_cfg(env_name, "skrl", backend="torch")
         if cfg_override is not None:
@@ -163,6 +164,7 @@ class Trainer:
         self._env_name = env_name
         self._sim_backend = sim_backend
         self._enable_render = enable_render
+        self._log_dir = log_dir
 
     def train(self, initial_policy: str = None) -> None:
         """
@@ -173,7 +175,11 @@ class Trainer:
         set_seed(rlcfg.seed)
         skrl_env = wrap_env(env, self._enable_render)
         models = self._make_model(skrl_env, rlcfg)
-        ppo_cfg = _get_cfg(rlcfg, skrl_env, log_dir=get_log_dir(self._env_name))
+        ppo_cfg = _get_cfg(
+            rlcfg,
+            skrl_env,
+            log_dir=self._log_dir or get_log_dir(self._env_name),
+        )
         agent = self._make_agent(models, skrl_env, ppo_cfg)
         if initial_policy:
             agent.load(initial_policy)

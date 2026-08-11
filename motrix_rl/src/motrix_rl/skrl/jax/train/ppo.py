@@ -168,6 +168,7 @@ class Trainer:
         sim_backend: str = None,
         enable_render: bool = False,
         cfg_override: dict = None,
+        log_dir: str = None,
     ) -> None:
         rlcfg = registry.default_rl_cfg(env_name, "skrl", backend="jax")
         if cfg_override is not None:
@@ -176,6 +177,7 @@ class Trainer:
         self._env_name = env_name
         self._sim_backend = sim_backend
         self._enable_render = enable_render
+        self._log_dir = log_dir
 
     def train(
         self,
@@ -196,7 +198,7 @@ class Trainer:
         ppo_cfg = _get_cfg(
             rlcfg,
             skrl_env,
-            log_dir=get_log_dir(self._env_name),
+            log_dir=self._log_dir or get_log_dir(self._env_name),
             freeze_state_preprocessor=freeze_state_preprocessor,
         )
         agent = self._make_agent(models, skrl_env, ppo_cfg)

@@ -15,6 +15,7 @@
 
 
 import logging
+import re
 
 from absl import app, flags
 from skrl import config
@@ -72,6 +73,11 @@ _RENDER = flags.DEFINE_bool("render", False, "Render the env")
 _TRAIN_BACKEND = flags.DEFINE_string("train-backend", "jax", "The learning backend. (jax/torch)")
 _SEED = flags.DEFINE_integer("seed", None, "Random seed for reproducibility")
 _RAND_SEED = flags.DEFINE_bool("rand-seed", False, "Generate random seed")
+_RUN_TAG = flags.DEFINE_string(
+    "run-tag",
+    None,
+    "Optional safe label used to isolate this run under its environment log directory",
+)
 
 
 def get_train_backend(supports: utils.DeviceSupports):
@@ -133,6 +139,13 @@ def main(argv):
         rl_override["seed"] = _SEED.value
 
     sim_backend = _SIM_BACKEND.value
+    log_dir = None
+    if _RUN_TAG.value:
+        if not re.fullmatch(r"[A-Za-z0-9_.-]+", _RUN_TAG.value):
+            raise app.UsageError(
+                "--run-tag may contain only letters, digits, '.', '_' and '-'"
+            )
+        log_dir = f"runs/{env_name}/{_RUN_TAG.value}"
     train_backend = "jax"
     if not _TRAIN_BACKEND.present:
         train_backend = get_train_backend(device_supports)
@@ -144,13 +157,25 @@ def main(argv):
         from motrix_rl.skrl.jax.train import ppo
 
         config.jax.backend = "jax"  # or "numpy"
-        trainer = ppo.Trainer(env_name, sim_backend, cfg_override=rl_override, enable_render=enable_render)
+        trainer = ppo.Trainer(
+            env_name,
+            sim_backend,
+            cfg_override=rl_override,
+            enable_render=enable_render,
+            log_dir=log_dir,
+        )
 
     elif train_backend == "torch":
         from motrix_rl.skrl.torch.train import ppo
 
         config.torch.backend = "torch"
-        trainer = ppo.Trainer(env_name, sim_backend, cfg_override=rl_override, enable_render=enable_render)
+        trainer = ppo.Trainer(
+            env_name,
+            sim_backend,
+            cfg_override=rl_override,
+            enable_render=enable_render,
+            log_dir=log_dir,
+        )
     else:
         raise Exception(f"Unknown train backend: {train_backend}")
 

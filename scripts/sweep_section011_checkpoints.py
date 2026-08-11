@@ -31,6 +31,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--num-envs", type=int, default=128)
     parser.add_argument("--episodes", type=int, default=128)
     parser.add_argument("--max-control-steps", type=int, default=5000)
+    parser.add_argument(
+        "--ranking-mode",
+        choices=("route", "skill"),
+        default="route",
+        help="Rank full-route checkpoints or local curriculum skills",
+    )
     parser.add_argument("--wait-pid", type=int)
     parser.add_argument("--wait-poll-seconds", type=float, default=30.0)
     parser.add_argument("--python", default=sys.executable)
@@ -89,8 +95,15 @@ def parse_metrics(text: str) -> dict[str, Any]:
     raise ValueError("evaluation stdout did not end with a JSON object")
 
 
-def ranking_key(item: dict[str, Any]) -> tuple[float, ...]:
+def ranking_key(item: dict[str, Any], ranking_mode: str) -> tuple[float, ...]:
     metrics = item["metrics"]
+    if ranking_mode == "skill":
+        return (
+            float(metrics.get("skill_success_rate", 0.0)),
+            float(metrics.get("all_time_max_y", float("-inf"))),
+            float(metrics.get("mean_episode_max_y", float("-inf"))),
+            -float(metrics.get("fall_rate", 1.0)),
+        )
     return (
         float(metrics.get("stable_success_rate", 0.0)),
         float(metrics.get("ever_on_platform_rate", 0.0)),
@@ -101,7 +114,9 @@ def ranking_key(item: dict[str, Any]) -> tuple[float, ...]:
     )
 
 
-def write_summary(jsonl_path: Path, summary_path: Path) -> None:
+def write_summary(
+    jsonl_path: Path, summary_path: Path, ranking_mode: str
+) -> None:
     successful = []
     for line in jsonl_path.read_text().splitlines():
         try:
@@ -110,16 +125,29 @@ def write_summary(jsonl_path: Path, summary_path: Path) -> None:
             continue
         if item.get("status") == "ok":
             successful.append(item)
-    successful.sort(key=ranking_key, reverse=True)
-    summary = {
-        "ranking_order": [
+    successful.sort(
+        key=lambda item: ranking_key(item, ranking_mode), reverse=True
+    )
+    ranking_order = (
+        [
+            "skill_success_rate",
+            "all_time_max_y",
+            "mean_episode_max_y",
+            "negative_fall_rate",
+        ]
+        if ranking_mode == "skill"
+        else [
             "stable_success_rate",
             "ever_on_platform_rate",
             "all_time_max_waypoints",
             "all_time_max_y",
             "mean_episode_max_y",
             "negative_fall_rate",
-        ],
+        ]
+    )
+    summary = {
+        "ranking_mode": ranking_mode,
+        "ranking_order": ranking_order,
         "evaluations": len(successful),
         "ranked_results": successful,
     }
@@ -189,10 +217,10 @@ def main() -> int:
                 item["status"] = "process_error"
             with jsonl_path.open("a") as output:
                 output.write(json.dumps(item, ensure_ascii=False, sort_keys=True) + "\n")
-            write_summary(jsonl_path, summary_path)
+            write_summary(jsonl_path, summary_path, args.ranking_mode)
 
     if jsonl_path.exists():
-        write_summary(jsonl_path, summary_path)
+        write_summary(jsonl_path, summary_path, args.ranking_mode)
     print(f"sweep complete: {summary_path}", flush=True)
     return 0
 
