@@ -2409,6 +2409,100 @@ class VBotSection011HandoffHealthyTestM045BootstrapAngularForward06EnvCfg(
     )
 
 
+@registry.envcfg(
+    "vbot_locomotion_section011_handoff_seed343_m095_m045_bootstrap_angular_forward06"
+)
+@dataclass
+class VBotSection011HandoffSeed343M095M045BootstrapAngularForward06EnvCfg(
+    VBotSection011EarlyBridgeM045AngularForward06EnvCfg
+):
+    """Train the bridge from healthy states captured from seed343 at y=-0.95."""
+
+    skill_goal_hold_seconds: float = 0.03
+    skill_goal_upright_cos_min: float = 0.7
+    skill_goal_base_clearance_min: float = 0.2
+    skill_goal_angular_xy_max: float = 3.0
+    reward_skill_stable_step: float = 2.0
+    reward_skill_goal: float = 50.0
+    handoff_state_file: str | None = os.path.join(
+        os.path.dirname(__file__),
+        "handoff_states",
+        "seed343_y_m095_healthy_train.npz",
+    )
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_handoff_seed343_m095_m045_bootstrap_test_angular_forward06"
+)
+@dataclass
+class VBotSection011HandoffSeed343M095M045BootstrapTestAngularForward06EnvCfg(
+    VBotSection011HandoffSeed343M095M045BootstrapAngularForward06EnvCfg
+):
+    """Evaluate the seed343 bridge on held-out formal handoff states."""
+
+    handoff_state_file: str | None = os.path.join(
+        os.path.dirname(__file__),
+        "handoff_states",
+        "seed343_y_m095_healthy_test.npz",
+    )
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_handoff_seed343_m095_m025_bootstrap_angular_forward06"
+)
+@dataclass
+class VBotSection011HandoffSeed343M095M025BootstrapAngularForward06EnvCfg(
+    VBotSection011HandoffSeed343M095M045BootstrapAngularForward06EnvCfg
+):
+    """Extend the seed343 handoff specialist to y=-0.25."""
+
+    skill_goal_y: float | None = -0.25
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_handoff_seed343_m095_m025_bootstrap_test_angular_forward06"
+)
+@dataclass
+class VBotSection011HandoffSeed343M095M025BootstrapTestAngularForward06EnvCfg(
+    VBotSection011HandoffSeed343M095M025BootstrapAngularForward06EnvCfg
+):
+    """Evaluate the extended y=-0.25 skill on held-out handoff states."""
+
+    handoff_state_file: str | None = os.path.join(
+        os.path.dirname(__file__),
+        "handoff_states",
+        "seed343_y_m095_healthy_test.npz",
+    )
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_handoff_seed343_m095_000_bootstrap_angular_forward06"
+)
+@dataclass
+class VBotSection011HandoffSeed343M095000BootstrapAngularForward06EnvCfg(
+    VBotSection011HandoffSeed343M095M025BootstrapAngularForward06EnvCfg
+):
+    """Extend the seed343 handoff specialist through the second waypoint."""
+
+    skill_goal_y: float | None = 0.0
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_handoff_seed343_m095_000_bootstrap_test_angular_forward06"
+)
+@dataclass
+class VBotSection011HandoffSeed343M095000BootstrapTestAngularForward06EnvCfg(
+    VBotSection011HandoffSeed343M095000BootstrapAngularForward06EnvCfg
+):
+    """Evaluate the y=0 handoff skill on held-out formal states."""
+
+    handoff_state_file: str | None = os.path.join(
+        os.path.dirname(__file__),
+        "handoff_states",
+        "seed343_y_m095_healthy_test.npz",
+    )
+
+
 @registry.envcfg("vbot_locomotion_section011_integrated_gate100_hold10_70")
 @dataclass
 class VBotSection011IntegratedGate100Hold1070EnvCfg(

@@ -334,6 +334,30 @@ def generate_repeating_array(num_period, num_reset, period_counter):
     "vbot_locomotion_section011_handoff_healthy_test_m045_bootstrap_angular_forward06",
     "np",
 )
+@registry.env(
+    "vbot_locomotion_section011_handoff_seed343_m095_m045_bootstrap_angular_forward06",
+    "np",
+)
+@registry.env(
+    "vbot_locomotion_section011_handoff_seed343_m095_m045_bootstrap_test_angular_forward06",
+    "np",
+)
+@registry.env(
+    "vbot_locomotion_section011_handoff_seed343_m095_m025_bootstrap_angular_forward06",
+    "np",
+)
+@registry.env(
+    "vbot_locomotion_section011_handoff_seed343_m095_m025_bootstrap_test_angular_forward06",
+    "np",
+)
+@registry.env(
+    "vbot_locomotion_section011_handoff_seed343_m095_000_bootstrap_angular_forward06",
+    "np",
+)
+@registry.env(
+    "vbot_locomotion_section011_handoff_seed343_m095_000_bootstrap_test_angular_forward06",
+    "np",
+)
 @registry.env("vbot_locomotion_section011_integrated_gate100_hold10_70", "np")
 @registry.env(
     "vbot_locomotion_section011_integrated_gate100_hold10_fall10_70", "np"
