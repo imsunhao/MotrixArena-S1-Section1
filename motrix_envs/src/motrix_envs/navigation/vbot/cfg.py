@@ -1094,6 +1094,34 @@ class VBotSection011ApproachEnvCfg(
     skill_goal_y: float | None = -1.55
 
 
+@registry.envcfg("vbot_locomotion_section011_integrated_stage0_90")
+@dataclass
+class VBotSection011IntegratedStage090EnvCfg(
+    VBotSection011FullRouteContactEnvCfg
+):
+    """Integrate official approach and rough starts with a 90/10 mixture."""
+
+    curriculum_spawn_probabilities: tuple[float, ...] = (0.9, 0.1)
+    curriculum_hfield_x_range: tuple[float, float] = (0.5, 0.7)
+    curriculum_hfield_y_range: tuple[float, float] = (-1.45, -1.25)
+    curriculum_hfield_spawn_z: float = 0.65
+    max_episode_seconds: float = 20.0
+    max_episode_steps: int = 2000
+    skill_goal_y: float | None = -1.1
+    reward_skill_goal: float = 200.0
+    terminate_on_skill_goal: bool = True
+
+
+@registry.envcfg("vbot_locomotion_section011_integrated_stage0_75")
+@dataclass
+class VBotSection011IntegratedStage075EnvCfg(
+    VBotSection011IntegratedStage090EnvCfg
+):
+    """Increase rough-start exposure to 25 percent."""
+
+    curriculum_spawn_probabilities: tuple[float, ...] = (0.75, 0.25)
+
+
 @registry.envcfg("vbot_locomotion_section011_mixed_route_contact")
 @dataclass
 class VBotSection011MixedRouteContactEnvCfg(
