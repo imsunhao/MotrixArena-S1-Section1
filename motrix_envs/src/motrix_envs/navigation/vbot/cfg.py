@@ -1938,6 +1938,86 @@ class VBotSection011PostSecond100AngularForward06EnvCfg(
     skill_goal_y: float | None = 1.0
 
 
+@registry.envcfg(
+    "vbot_locomotion_section011_post_third_225_angular_forward06"
+)
+@dataclass
+class VBotSection011PostThird225AngularForward06EnvCfg(
+    VBotSection011FullRouteAngularSafeForward06EnvCfg
+):
+    """Learn the transition from the heightfield exit onto the ramp."""
+
+    curriculum_spawn_probabilities: tuple[float, ...] = (0.0, 1.0)
+    curriculum_hfield_x_range: tuple[float, float] = (0.4, 0.8)
+    curriculum_hfield_y_range: tuple[float, float] = (1.0, 1.15)
+    curriculum_hfield_spawn_clearance: float = 0.5
+    max_episode_seconds: float = 20.0
+    max_episode_steps: int = 2000
+    skill_goal_y: float | None = 2.25
+    reward_skill_goal: float = 100.0
+    terminate_on_skill_goal: bool = True
+    skill_goal_require_stability: bool = True
+    skill_goal_hold_seconds: float = 0.05
+    skill_goal_upright_cos_min: float = 0.7
+    skill_goal_base_clearance_min: float = 0.25
+    skill_goal_angular_xy_max: float = 3.0
+
+
+@registry.envcfg("vbot_locomotion_section011_ramp_400_angular_forward06")
+@dataclass
+class VBotSection011Ramp400AngularForward06EnvCfg(
+    VBotSection011PostThird225AngularForward06EnvCfg
+):
+    """Climb from the foot of the 15-degree ramp to the y=4 gate."""
+
+    curriculum_hfield_x_range: tuple[float, float] = (0.3, 0.7)
+    curriculum_hfield_y_range: tuple[float, float] = (2.1, 2.25)
+    skill_goal_y: float | None = 4.0
+    max_episode_seconds: float = 25.0
+    max_episode_steps: int = 2500
+
+
+@registry.envcfg("vbot_locomotion_section011_ramp_600_angular_forward06")
+@dataclass
+class VBotSection011Ramp600AngularForward06EnvCfg(
+    VBotSection011Ramp400AngularForward06EnvCfg
+):
+    """Continue from the middle of the ramp to the y=6 gate."""
+
+    curriculum_hfield_x_range: tuple[float, float] = (-0.2, 0.2)
+    curriculum_hfield_y_range: tuple[float, float] = (3.7, 3.9)
+    skill_goal_y: float | None = 6.0
+
+
+@registry.envcfg("vbot_locomotion_section011_ramp_top_690_angular_forward06")
+@dataclass
+class VBotSection011RampTop690AngularForward06EnvCfg(
+    VBotSection011Ramp600AngularForward06EnvCfg
+):
+    """Climb the final ramp segment and cross onto the 2026 platform."""
+
+    curriculum_hfield_x_range: tuple[float, float] = (-0.2, 0.2)
+    curriculum_hfield_y_range: tuple[float, float] = (5.7, 5.9)
+    skill_goal_y: float | None = 6.9
+
+
+@registry.envcfg("vbot_locomotion_section011_platform_780_angular_forward06")
+@dataclass
+class VBotSection011Platform780AngularForward06EnvCfg(
+    VBotSection011RampTop690AngularForward06EnvCfg
+):
+    """Approach the platform edge and optimize the official stable success."""
+
+    curriculum_hfield_x_range: tuple[float, float] = (-0.2, 0.2)
+    curriculum_hfield_y_range: tuple[float, float] = (6.45, 6.65)
+    skill_goal_y: float | None = None
+    reward_skill_goal: float = 0.0
+    terminate_on_skill_goal: bool = False
+    skill_goal_require_stability: bool = False
+    max_episode_seconds: float = 20.0
+    max_episode_steps: int = 2000
+
+
 @registry.envcfg("vbot_locomotion_section011_mid_bridge_000_angular_forward06")
 @dataclass
 class VBotSection011MidBridge000AngularForward06EnvCfg(

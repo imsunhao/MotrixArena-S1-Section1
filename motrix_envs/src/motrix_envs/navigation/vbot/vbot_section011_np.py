@@ -224,6 +224,11 @@ def generate_repeating_array(num_period, num_reset, period_counter):
 @registry.env(
     "vbot_locomotion_section011_post_second_100_angular_forward06", "np"
 )
+@registry.env("vbot_locomotion_section011_post_third_225_angular_forward06", "np")
+@registry.env("vbot_locomotion_section011_ramp_400_angular_forward06", "np")
+@registry.env("vbot_locomotion_section011_ramp_600_angular_forward06", "np")
+@registry.env("vbot_locomotion_section011_ramp_top_690_angular_forward06", "np")
+@registry.env("vbot_locomotion_section011_platform_780_angular_forward06", "np")
 @registry.env("vbot_locomotion_section011_mid_bridge_000_angular_forward06", "np")
 @registry.env("vbot_locomotion_section011_early_bridge_000_angular_forward06", "np")
 @registry.env("vbot_locomotion_section011_early_bridge_m045_angular_forward06", "np")
@@ -1548,7 +1553,15 @@ class VBotSection011Env(NpEnv):
         spawn_y[hfield] = np.random.uniform(
             *self._cfg.curriculum_hfield_y_range, size=int(np.sum(hfield))
         )
-        spawn_z[hfield] = self._cfg.curriculum_hfield_spawn_z
+        hfield_spawn_clearance = getattr(
+            self._cfg, "curriculum_hfield_spawn_clearance", None
+        )
+        if hfield_spawn_clearance is None:
+            spawn_z[hfield] = self._cfg.curriculum_hfield_spawn_z
+        elif np.any(hfield):
+            spawn_z[hfield] = self._sample_terrain_height(
+                spawn_x[hfield], spawn_y[hfield]
+            ) + float(hfield_spawn_clearance)
 
         if len(probabilities) == 3:
             transition = segment == 2
