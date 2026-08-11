@@ -953,6 +953,16 @@ class VBotSection011RoughEntryEnvCfg(
     terminate_on_skill_goal: bool = True
 
 
+@registry.envcfg("vbot_locomotion_section011_rough_entry_stage10")
+@dataclass
+class VBotSection011RoughEntryStage10EnvCfg(
+    VBotSection011RoughEntryEnvCfg
+):
+    """Advance the entry skill to y=-1.2 after crossing the first ripple."""
+
+    skill_goal_y: float | None = -1.2
+
+
 @registry.envcfg("vbot_locomotion_section011_rough_entry_stage0")
 @dataclass
 class VBotSection011RoughEntryStage0EnvCfg(
