@@ -46,6 +46,14 @@ _SIM_BACKEND = flags.DEFINE_string("sim-backend", None, "Simulation backend")
 _BODY_FORWARD_SPEED = flags.DEFINE_float(
     "body-forward-speed", None, "Override commanded body-forward speed"
 )
+_HANDOFF_STATE_OUTPUT = flags.DEFINE_string(
+    "handoff-state-output",
+    None,
+    "Optional .npz path for first-crossing simulator states",
+)
+_HANDOFF_Y = flags.DEFINE_float(
+    "handoff-y", -1.0, "Y threshold used by --handoff-state-output"
+)
 
 
 def _load_agent(trainer, env, rlcfg, policy_path):
@@ -119,6 +127,10 @@ def main(argv):
     stage_ages = np.zeros(_NUM_ENVS.value, dtype=np.int32)
     stage_entry_counts = np.zeros(len(policy_paths), dtype=np.int64)
     stage_entry_counts[0] = _NUM_ENVS.value
+    handoff_captured = np.zeros(_NUM_ENVS.value, dtype=bool)
+    handoff_dof_pos = []
+    handoff_dof_vel = []
+    handoff_actions = []
     control_steps = 0
     reward_sum = 0.0
     transition_count = 0
@@ -126,6 +138,23 @@ def main(argv):
     while control_steps < _MAX_CONTROL_STEPS.value:
         root_pos, _, _ = raw_env._extract_root_state(raw_env.state.data)
         root_y = root_pos[:, 1]
+        if _HANDOFF_STATE_OUTPUT.value:
+            first_crossing = np.logical_and(
+                ~handoff_captured, root_y >= _HANDOFF_Y.value
+            )
+            if np.any(first_crossing):
+                handoff_dof_pos.append(
+                    np.asarray(raw_env.state.data.dof_pos)[first_crossing].copy()
+                )
+                handoff_dof_vel.append(
+                    np.asarray(raw_env.state.data.dof_vel)[first_crossing].copy()
+                )
+                handoff_actions.append(
+                    np.asarray(raw_env.state.info["current_actions"])[
+                        first_crossing
+                    ].copy()
+                )
+                handoff_captured[first_crossing] = True
         for next_stage, boundary_y in enumerate(switch_y, start=1):
             enter = np.logical_and(
                 stages == next_stage - 1, root_y >= boundary_y
@@ -170,6 +199,7 @@ def main(argv):
         reset_envs = np.asarray(raw_env.state.info["steps"]) == 0
         stages[reset_envs] = 0
         stage_ages[reset_envs] = 0
+        handoff_captured[reset_envs] = False
         stage_entry_counts[0] += int(np.sum(reset_envs))
         if raw_env.get_success_metrics()["completed_episodes"] >= _EPISODES.value:
             break
@@ -203,6 +233,19 @@ def main(argv):
             "ongoing_max_waypoints": int(np.max(ongoing_waypoints)),
         }
     )
+    if _HANDOFF_STATE_OUTPUT.value:
+        if handoff_dof_pos:
+            np.savez_compressed(
+                _HANDOFF_STATE_OUTPUT.value,
+                dof_pos=np.concatenate(handoff_dof_pos, axis=0),
+                dof_vel=np.concatenate(handoff_dof_vel, axis=0),
+                current_actions=np.concatenate(handoff_actions, axis=0),
+                handoff_y=np.asarray(_HANDOFF_Y.value, dtype=np.float32),
+            )
+        metrics["handoff_states_collected"] = int(
+            sum(batch.shape[0] for batch in handoff_dof_pos)
+        )
+        metrics["handoff_state_output"] = _HANDOFF_STATE_OUTPUT.value
     print(json.dumps(metrics, ensure_ascii=False, indent=2, sort_keys=True))
 
 
