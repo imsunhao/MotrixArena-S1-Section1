@@ -366,6 +366,8 @@ class VBotSection011EnvCfg(VBotStairsEnvCfg):
     reward_first_platform: float = 25.0
     reward_stable_step: float = 0.5
     reward_stable_success: float = 300.0
+    platform_stop_y: float | None = None
+    reward_platform_stop: float = 0.0
     reward_feet_air_time: float = 1.0
     minimum_swing_seconds: float = 0.15
     terrain_scan_distances: tuple[float, ...] = (
@@ -2010,12 +2012,86 @@ class VBotSection011Platform780AngularForward06EnvCfg(
 
     curriculum_hfield_x_range: tuple[float, float] = (-0.2, 0.2)
     curriculum_hfield_y_range: tuple[float, float] = (6.45, 6.65)
-    skill_goal_y: float | None = None
+    # Stop slightly before the platform gate. The inherited body-forward
+    # controller otherwise keeps moving whenever it misses the small final
+    # target radius and can run straight off the platform.
+    skill_goal_y: float | None = 6.8
     reward_skill_goal: float = 0.0
     terminate_on_skill_goal: bool = False
     skill_goal_require_stability: bool = False
+    stop_command_at_skill_goal: bool = True
+    skill_goal_stop_lead_y: float = 0.0
+    platform_stop_y: float | None = 6.8
+    reward_platform_stop: float = 10.0
     max_episode_seconds: float = 20.0
     max_episode_steps: int = 2000
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_platform_stand_700_angular_forward06"
+)
+@dataclass
+class VBotSection011PlatformStand700AngularForward06EnvCfg(
+    VBotSection011Platform780AngularForward06EnvCfg
+):
+    """Learn the zero-command standing skill directly on the 2026 platform."""
+
+    curriculum_hfield_x_range: tuple[float, float] = (-0.2, 0.2)
+    curriculum_hfield_y_range: tuple[float, float] = (7.0, 7.2)
+    max_episode_seconds: float = 10.0
+    max_episode_steps: int = 1000
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_platform_stand_relaxed_angular_forward06"
+)
+@dataclass
+class VBotSection011PlatformStandRelaxedAngularForward06EnvCfg(
+    VBotSection011PlatformStand700AngularForward06EnvCfg
+):
+    """Bootstrap platform stopping before restoring the official strict gate."""
+
+    stable_linear_speed_max: float = 0.5
+    stable_angular_speed_max: float = 1.5
+    stable_upright_cos_min: float = 0.8
+    stable_hold_seconds: float = 0.5
+    reward_stable_step: float = 2.0
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_platform_stand_relaxed_hold005_angular_forward06"
+)
+@dataclass
+class VBotSection011PlatformStandRelaxedHold005AngularForward06EnvCfg(
+    VBotSection011PlatformStandRelaxedAngularForward06EnvCfg
+):
+    """Bootstrap the relaxed platform gate with a five-step hold."""
+
+    stable_hold_seconds: float = 0.05
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_platform_stand_relaxed_hold010_angular_forward06"
+)
+@dataclass
+class VBotSection011PlatformStandRelaxedHold010AngularForward06EnvCfg(
+    VBotSection011PlatformStandRelaxedHold005AngularForward06EnvCfg
+):
+    """Extend the relaxed platform hold to ten control steps."""
+
+    stable_hold_seconds: float = 0.1
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_platform_stand_relaxed_hold025_angular_forward06"
+)
+@dataclass
+class VBotSection011PlatformStandRelaxedHold025AngularForward06EnvCfg(
+    VBotSection011PlatformStandRelaxedHold010AngularForward06EnvCfg
+):
+    """Extend the relaxed platform hold to twenty-five control steps."""
+
+    stable_hold_seconds: float = 0.25
 
 
 @registry.envcfg("vbot_locomotion_section011_mid_bridge_000_angular_forward06")

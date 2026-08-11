@@ -229,6 +229,24 @@ def generate_repeating_array(num_period, num_reset, period_counter):
 @registry.env("vbot_locomotion_section011_ramp_600_angular_forward06", "np")
 @registry.env("vbot_locomotion_section011_ramp_top_690_angular_forward06", "np")
 @registry.env("vbot_locomotion_section011_platform_780_angular_forward06", "np")
+@registry.env(
+    "vbot_locomotion_section011_platform_stand_700_angular_forward06", "np"
+)
+@registry.env(
+    "vbot_locomotion_section011_platform_stand_relaxed_angular_forward06", "np"
+)
+@registry.env(
+    "vbot_locomotion_section011_platform_stand_relaxed_hold005_angular_forward06",
+    "np",
+)
+@registry.env(
+    "vbot_locomotion_section011_platform_stand_relaxed_hold010_angular_forward06",
+    "np",
+)
+@registry.env(
+    "vbot_locomotion_section011_platform_stand_relaxed_hold025_angular_forward06",
+    "np",
+)
 @registry.env("vbot_locomotion_section011_mid_bridge_000_angular_forward06", "np")
 @registry.env("vbot_locomotion_section011_early_bridge_000_angular_forward06", "np")
 @registry.env("vbot_locomotion_section011_early_bridge_m045_angular_forward06", "np")
@@ -384,6 +402,7 @@ class VBotSection011Env(NpEnv):
         self.episode_max_y = float("-inf")
         self.all_time_max_y = float("-inf")
         self.all_time_max_waypoints = 0
+        self.all_time_max_stable_hold_steps = 0
         self.all_time_max_skill_goal_hold_steps = 0
         self.skill_goal_stable_candidate_steps = 0
         self.fall_y_bin_edges = np.asarray(
@@ -832,6 +851,10 @@ class VBotSection011Env(NpEnv):
 
         hold_steps = np.where(stable_candidate, info["stable_hold_steps"] + 1, 0)
         info["stable_hold_steps"] = hold_steps.astype(np.int32)
+        self.all_time_max_stable_hold_steps = max(
+            self.all_time_max_stable_hold_steps,
+            int(np.max(hold_steps)),
+        )
         info["stable_candidate"] = stable_candidate
         stable_now = hold_steps >= self.stable_hold_steps_required
         info["stable_success_this_step"] = np.logical_and(
@@ -866,6 +889,9 @@ class VBotSection011Env(NpEnv):
             ),
             "all_time_max_y": self.all_time_max_y,
             "all_time_max_waypoints": self.all_time_max_waypoints,
+            "all_time_max_stable_hold_steps": (
+                self.all_time_max_stable_hold_steps
+            ),
             "all_time_max_skill_goal_hold_steps": (
                 self.all_time_max_skill_goal_hold_steps
             ),
@@ -1456,6 +1482,24 @@ class VBotSection011Env(NpEnv):
             )
         commanded_speed = np.linalg.norm(velocity_commands[:, :2], axis=1)
         planar_speed = np.linalg.norm(base_lin_vel[:, :2], axis=1)
+        platform_stop_y = getattr(cfg, "platform_stop_y", None)
+        if platform_stop_y is None:
+            platform_stop_zone = np.zeros(self._num_envs, dtype=bool)
+        else:
+            platform_stop_zone = np.logical_and(
+                root_pos[:, 1] >= float(platform_stop_y),
+                np.abs(root_pos[:, 0]) <= self.platform_x_abs_max,
+            )
+        motion_reward_mask = ~platform_stop_zone
+        stop_upright_score = np.clip(
+            (-projected_gravity[:, 2] - 0.7) / 0.3, 0.0, 1.0
+        )
+        platform_stop_score = (
+            np.exp(-np.square(planar_speed / 0.35))
+            * np.exp(-np.square(np.linalg.norm(gyro, axis=1) / 0.75))
+            * stop_upright_score
+            * platform_stop_zone
+        )
         stalled = np.logical_and.reduce(
             (commanded_speed > 0.5, planar_speed < 0.1, ~info["on_platform"])
         )
@@ -1472,19 +1516,21 @@ class VBotSection011Env(NpEnv):
             base_contact = np.zeros(self._num_envs, dtype=bool)
 
         reward = (
-            cfg.reward_tracking_linear * tracking_linear
-            + cfg.reward_tracking_yaw * tracking_yaw
+            cfg.reward_tracking_linear * tracking_linear * motion_reward_mask
+            + cfg.reward_tracking_yaw * tracking_yaw * motion_reward_mask
             + cfg.reward_target_direction_velocity
             * target_direction_velocity_for_reward
+            * motion_reward_mask
             + cfg.reward_skill_goal * skill_success_this_step
             + cfg.reward_skill_stable_step
             * info["skill_goal_stable_candidate"]
-            + cfg.reward_progress * progress_for_reward
+            + cfg.reward_progress * progress_for_reward * motion_reward_mask
             + cfg.reward_waypoint * reached_waypoint
             + cfg.reward_first_platform * info["first_on_platform"]
             + cfg.reward_stable_step * info["stable_candidate"]
             + cfg.reward_stable_success * info["stable_success_this_step"]
-            + cfg.reward_feet_air_time * feet_air_reward
+            + cfg.reward_platform_stop * platform_stop_score
+            + cfg.reward_feet_air_time * feet_air_reward * motion_reward_mask
             + foot_clearance_scale * foot_clearance_reward
             - cfg.penalty_orientation * orientation_cost
             - cfg.penalty_vertical_velocity * vertical_velocity_cost
