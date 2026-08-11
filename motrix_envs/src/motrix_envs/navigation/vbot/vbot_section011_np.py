@@ -83,6 +83,7 @@ def generate_repeating_array(num_period, num_reset, period_counter):
 @registry.env("vbot_locomotion_section011_approach", "np")
 @registry.env("vbot_locomotion_section011_integrated_stage0_90", "np")
 @registry.env("vbot_locomotion_section011_integrated_stage0_75", "np")
+@registry.env("vbot_locomotion_section011_integrated_stage0_50", "np")
 @registry.env("vbot_locomotion_section011_mixed_route_contact", "np")
 @registry.env("vbot_navigation_section011_go1_transfer_fast_corridor_skill", "np")
 @registry.env("vbot_navigation_section011", "np")

@@ -1122,6 +1122,16 @@ class VBotSection011IntegratedStage075EnvCfg(
     curriculum_spawn_probabilities: tuple[float, ...] = (0.75, 0.25)
 
 
+@registry.envcfg("vbot_locomotion_section011_integrated_stage0_50")
+@dataclass
+class VBotSection011IntegratedStage050EnvCfg(
+    VBotSection011IntegratedStage090EnvCfg
+):
+    """Balance official and rough starts equally after integration succeeds."""
+
+    curriculum_spawn_probabilities: tuple[float, ...] = (0.5, 0.5)
+
+
 @registry.envcfg("vbot_locomotion_section011_mixed_route_contact")
 @dataclass
 class VBotSection011MixedRouteContactEnvCfg(

@@ -401,6 +401,7 @@ class navigation:
     @rlcfg("vbot_locomotion_section011_approach")
     @rlcfg("vbot_locomotion_section011_integrated_stage0_90")
     @rlcfg("vbot_locomotion_section011_integrated_stage0_75")
+    @rlcfg("vbot_locomotion_section011_integrated_stage0_50")
     @rlcfg("vbot_locomotion_section011_mixed_route_contact")
     @rlcfg("vbot_navigation_section011")
     @rlcfg("vbot_navigation_section01")
