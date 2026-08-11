@@ -2043,6 +2043,103 @@ class VBotSection011PlatformStand700AngularForward06EnvCfg(
 
 
 @registry.envcfg(
+    "vbot_locomotion_section011_platform_stand_strict_hold030_angular_forward06"
+)
+@dataclass
+class VBotSection011PlatformStandStrictHold030AngularForward06EnvCfg(
+    VBotSection011PlatformStand700AngularForward06EnvCfg
+):
+    """Bootstrap the official strict stability gate with a 30-step hold."""
+
+    stable_hold_seconds: float = 0.3
+    reward_stable_step: float = 10.0
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_platform_stand_strict_hold035_angular_forward06"
+)
+@dataclass
+class VBotSection011PlatformStandStrictHold035AngularForward06EnvCfg(
+    VBotSection011PlatformStandStrictHold030AngularForward06EnvCfg
+):
+    """Extend the strict platform hold to thirty-five control steps."""
+
+    stable_hold_seconds: float = 0.35
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_platform_stand_strict_hold040_angular_forward06"
+)
+@dataclass
+class VBotSection011PlatformStandStrictHold040AngularForward06EnvCfg(
+    VBotSection011PlatformStandStrictHold035AngularForward06EnvCfg
+):
+    """Extend the strict platform hold to forty control steps."""
+
+    stable_hold_seconds: float = 0.4
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_platform_stand_strict_hold045_angular_forward06"
+)
+@dataclass
+class VBotSection011PlatformStandStrictHold045AngularForward06EnvCfg(
+    VBotSection011PlatformStandStrictHold040AngularForward06EnvCfg
+):
+    """Extend the strict platform hold to forty-five control steps."""
+
+    stable_hold_seconds: float = 0.45
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_platform_stand_strict_hold050_angular_forward06"
+)
+@dataclass
+class VBotSection011PlatformStandStrictHold050AngularForward06EnvCfg(
+    VBotSection011PlatformStandStrictHold045AngularForward06EnvCfg
+):
+    """Extend the strict platform hold to half a second."""
+
+    stable_hold_seconds: float = 0.5
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_platform_stand_strict_hold060_angular_forward06"
+)
+@dataclass
+class VBotSection011PlatformStandStrictHold060AngularForward06EnvCfg(
+    VBotSection011PlatformStandStrictHold050AngularForward06EnvCfg
+):
+    """Extend the strict platform hold to sixty control steps."""
+
+    stable_hold_seconds: float = 0.6
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_platform_stand_strict_hold075_angular_forward06"
+)
+@dataclass
+class VBotSection011PlatformStandStrictHold075AngularForward06EnvCfg(
+    VBotSection011PlatformStandStrictHold060AngularForward06EnvCfg
+):
+    """Extend the strict platform hold to three quarters of a second."""
+
+    stable_hold_seconds: float = 0.75
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_platform_stand_strict_hold100_angular_forward06"
+)
+@dataclass
+class VBotSection011PlatformStandStrictHold100AngularForward06EnvCfg(
+    VBotSection011PlatformStandStrictHold075AngularForward06EnvCfg
+):
+    """Train the final official one-second strict platform hold."""
+
+    stable_hold_seconds: float = 1.0
+
+
+@registry.envcfg(
     "vbot_locomotion_section011_platform_stand_relaxed_angular_forward06"
 )
 @dataclass

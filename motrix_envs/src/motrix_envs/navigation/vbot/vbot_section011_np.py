@@ -233,6 +233,38 @@ def generate_repeating_array(num_period, num_reset, period_counter):
     "vbot_locomotion_section011_platform_stand_700_angular_forward06", "np"
 )
 @registry.env(
+    "vbot_locomotion_section011_platform_stand_strict_hold030_angular_forward06",
+    "np",
+)
+@registry.env(
+    "vbot_locomotion_section011_platform_stand_strict_hold035_angular_forward06",
+    "np",
+)
+@registry.env(
+    "vbot_locomotion_section011_platform_stand_strict_hold040_angular_forward06",
+    "np",
+)
+@registry.env(
+    "vbot_locomotion_section011_platform_stand_strict_hold045_angular_forward06",
+    "np",
+)
+@registry.env(
+    "vbot_locomotion_section011_platform_stand_strict_hold050_angular_forward06",
+    "np",
+)
+@registry.env(
+    "vbot_locomotion_section011_platform_stand_strict_hold060_angular_forward06",
+    "np",
+)
+@registry.env(
+    "vbot_locomotion_section011_platform_stand_strict_hold075_angular_forward06",
+    "np",
+)
+@registry.env(
+    "vbot_locomotion_section011_platform_stand_strict_hold100_angular_forward06",
+    "np",
+)
+@registry.env(
     "vbot_locomotion_section011_platform_stand_relaxed_angular_forward06", "np"
 )
 @registry.env(
