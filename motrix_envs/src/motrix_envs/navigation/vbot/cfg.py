@@ -1965,6 +1965,38 @@ class VBotSection011PostThird225AngularForward06EnvCfg(
     skill_goal_angular_xy_max: float = 3.0
 
 
+@registry.envcfg(
+    "vbot_locomotion_section011_post_third_225_mixed_handoff_angular_forward06"
+)
+@dataclass
+class VBotSection011PostThird225MixedHandoffAngularForward06EnvCfg(
+    VBotSection011PostThird225AngularForward06EnvCfg
+):
+    """Adapt post-third control to nominal and dynamic y=1.0 handoffs."""
+
+    handoff_state_file: str | None = os.path.join(
+        os.path.dirname(__file__),
+        "handoff_states",
+        "postthird_y100_mixed_train.npz",
+    )
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_post_third_225_mixed_handoff_test_angular_forward06"
+)
+@dataclass
+class VBotSection011PostThird225MixedHandoffTestAngularForward06EnvCfg(
+    VBotSection011PostThird225MixedHandoffAngularForward06EnvCfg
+):
+    """Evaluate mixed post-third adaptation on a disjoint state split."""
+
+    handoff_state_file: str | None = os.path.join(
+        os.path.dirname(__file__),
+        "handoff_states",
+        "postthird_y100_mixed_test.npz",
+    )
+
+
 @registry.envcfg("vbot_locomotion_section011_ramp_400_angular_forward06")
 @dataclass
 class VBotSection011Ramp400AngularForward06EnvCfg(

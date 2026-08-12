@@ -225,6 +225,14 @@ def generate_repeating_array(num_period, num_reset, period_counter):
     "vbot_locomotion_section011_post_second_100_angular_forward06", "np"
 )
 @registry.env("vbot_locomotion_section011_post_third_225_angular_forward06", "np")
+@registry.env(
+    "vbot_locomotion_section011_post_third_225_mixed_handoff_angular_forward06",
+    "np",
+)
+@registry.env(
+    "vbot_locomotion_section011_post_third_225_mixed_handoff_test_angular_forward06",
+    "np",
+)
 @registry.env("vbot_locomotion_section011_ramp_400_angular_forward06", "np")
 @registry.env("vbot_locomotion_section011_ramp_600_angular_forward06", "np")
 @registry.env("vbot_locomotion_section011_ramp_top_690_angular_forward06", "np")
