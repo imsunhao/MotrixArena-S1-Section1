@@ -2011,6 +2011,38 @@ class VBotSection011Ramp400AngularForward06EnvCfg(
     max_episode_steps: int = 2500
 
 
+@registry.envcfg(
+    "vbot_locomotion_section011_ramp_400_mixed_handoff_angular_forward06"
+)
+@dataclass
+class VBotSection011Ramp400MixedHandoffAngularForward06EnvCfg(
+    VBotSection011Ramp400AngularForward06EnvCfg
+):
+    """Adapt ramp400 control to nominal and dynamic y=2.1 handoffs."""
+
+    handoff_state_file: str | None = os.path.join(
+        os.path.dirname(__file__),
+        "handoff_states",
+        "ramp400_y210_mixed_train.npz",
+    )
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_ramp_400_mixed_handoff_test_angular_forward06"
+)
+@dataclass
+class VBotSection011Ramp400MixedHandoffTestAngularForward06EnvCfg(
+    VBotSection011Ramp400MixedHandoffAngularForward06EnvCfg
+):
+    """Evaluate ramp400 mixed adaptation on disjoint handoff states."""
+
+    handoff_state_file: str | None = os.path.join(
+        os.path.dirname(__file__),
+        "handoff_states",
+        "ramp400_y210_mixed_test.npz",
+    )
+
+
 @registry.envcfg("vbot_locomotion_section011_ramp_600_angular_forward06")
 @dataclass
 class VBotSection011Ramp600AngularForward06EnvCfg(
@@ -2700,6 +2732,38 @@ class VBotSection011HandoffSeed343M095P100BootstrapTestAngularForward06EnvCfg(
         os.path.dirname(__file__),
         "handoff_states",
         "seed343_y_m095_healthy_test.npz",
+    )
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_handoff_p100_actual_mixed_angular_forward06"
+)
+@dataclass
+class VBotSection011HandoffP100ActualMixedAngularForward06EnvCfg(
+    VBotSection011HandoffSeed343M095P100BootstrapAngularForward06EnvCfg
+):
+    """Adapt p100 to newly sampled formal-route y=-0.95 handoffs."""
+
+    handoff_state_file: str | None = os.path.join(
+        os.path.dirname(__file__),
+        "handoff_states",
+        "p100_actual_mixed_train.npz",
+    )
+
+
+@registry.envcfg(
+    "vbot_locomotion_section011_handoff_p100_actual_mixed_test_angular_forward06"
+)
+@dataclass
+class VBotSection011HandoffP100ActualMixedTestAngularForward06EnvCfg(
+    VBotSection011HandoffP100ActualMixedAngularForward06EnvCfg
+):
+    """Evaluate p100 adaptation on disjoint current handoff states."""
+
+    handoff_state_file: str | None = os.path.join(
+        os.path.dirname(__file__),
+        "handoff_states",
+        "p100_actual_mixed_test.npz",
     )
 
 

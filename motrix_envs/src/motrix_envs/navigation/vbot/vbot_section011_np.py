@@ -234,6 +234,13 @@ def generate_repeating_array(num_period, num_reset, period_counter):
     "np",
 )
 @registry.env("vbot_locomotion_section011_ramp_400_angular_forward06", "np")
+@registry.env(
+    "vbot_locomotion_section011_ramp_400_mixed_handoff_angular_forward06", "np"
+)
+@registry.env(
+    "vbot_locomotion_section011_ramp_400_mixed_handoff_test_angular_forward06",
+    "np",
+)
 @registry.env("vbot_locomotion_section011_ramp_600_angular_forward06", "np")
 @registry.env("vbot_locomotion_section011_ramp_top_690_angular_forward06", "np")
 @registry.env("vbot_locomotion_section011_platform_780_angular_forward06", "np")
@@ -412,6 +419,14 @@ def generate_repeating_array(num_period, num_reset, period_counter):
 )
 @registry.env(
     "vbot_locomotion_section011_handoff_seed343_m095_p100_bootstrap_test_angular_forward06",
+    "np",
+)
+@registry.env(
+    "vbot_locomotion_section011_handoff_p100_actual_mixed_angular_forward06",
+    "np",
+)
+@registry.env(
+    "vbot_locomotion_section011_handoff_p100_actual_mixed_test_angular_forward06",
     "np",
 )
 @registry.env(
