@@ -103,7 +103,9 @@ class VBotSection01Cfg(EnvCfg):
     initial_yaw_noise: float = 0.0
     use_full_course_local_starts: bool = True
     stable_hold_seconds: float = 0.0
-    platform_y_min: float = 6.9
+    # The physical platform starts near y=6.83, but the Section1 finish marker
+    # and authoritative course target are centered at y=7.80.
+    platform_y_min: float = FULL_COURSE.target_y
     platform_x_abs_max: float = 4.5
     platform_base_z_min: float = 1.55
     stable_linear_speed_max: float = 0.25
@@ -118,7 +120,7 @@ class VBotSection01Cfg(EnvCfg):
     training_narrow_x_fraction: float = 0.0
     training_narrow_x_range: tuple[float, float] = (-0.25, 0.25)
     training_platform_start_fraction: float = 0.0
-    training_platform_y_range: tuple[float, float] = (7.0, 7.4)
+    training_platform_y_range: tuple[float, float] = (7.8, 8.2)
     training_brake_start_fraction: float = 0.0
     training_brake_y_range: tuple[float, float] = (5.8, 6.5)
     training_brake_speed_range: tuple[float, float] = (0.4, 1.0)
@@ -588,12 +590,12 @@ class VBotSection01XYYawStableV3Cfg(VBotSection01XYYawStableV2Cfg):
 class VBotSection01XYYawStableV4Cfg(VBotSection01XYYawStableV2Cfg):
     """Enter the platform with the proven gait, then fade to a standing pose."""
 
-    brake_start_y: float = 6.9
-    training_brake_y_range: tuple[float, float] = (6.5, 6.9)
+    brake_start_y: float = 7.65
+    training_brake_y_range: tuple[float, float] = (7.3, 7.65)
     control: ControlConfig = field(
         default_factory=lambda: ControlConfig(
-            reference_fade_start_y=6.9,
-            reference_fade_end_y=7.4,
+            reference_fade_start_y=7.65,
+            reference_fade_end_y=FULL_COURSE.target_y,
         )
     )
 
@@ -606,8 +608,8 @@ class VBotSection01XYYawStableV5Cfg(VBotSection01XYYawStableV4Cfg):
     control: ControlConfig = field(
         default_factory=lambda: ControlConfig(
             scale_residual_with_reference=True,
-            reference_fade_start_y=6.9,
-            reference_fade_end_y=7.4,
+            reference_fade_start_y=7.65,
+            reference_fade_end_y=FULL_COURSE.target_y,
         )
     )
 
@@ -621,8 +623,8 @@ class VBotSection01XYYawStableV6Cfg(VBotSection01XYYawStableV4Cfg):
         default_factory=lambda: ControlConfig(
             scale_residual_with_reference=True,
             residual_reference_floor=0.2,
-            reference_fade_start_y=6.9,
-            reference_fade_end_y=7.4,
+            reference_fade_start_y=7.65,
+            reference_fade_end_y=FULL_COURSE.target_y,
         )
     )
 

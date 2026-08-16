@@ -2,6 +2,8 @@
 """Record an X11 display for a fixed wall-clock duration and finalize with EOS."""
 
 import argparse
+from pathlib import Path
+
 import gi
 
 gi.require_version("Gst", "1.0")
@@ -13,6 +15,10 @@ def main() -> None:
     parser.add_argument("--display", default=":98")
     parser.add_argument("--output", required=True)
     parser.add_argument("--seconds", type=float, required=True)
+    parser.add_argument(
+        "--stop-file",
+        help="Optional file whose appearance requests a graceful EOS stop",
+    )
     args = parser.parse_args()
 
     Gst.init(None)
@@ -53,6 +59,16 @@ def main() -> None:
     bus.add_signal_watch()
     bus.connect("message", on_message)
     pipeline.set_state(Gst.State.PLAYING)
+    if args.stop_file:
+        stop_file = Path(args.stop_file)
+
+        def stop_when_requested() -> bool:
+            if stop_file.exists():
+                pipeline.send_event(Gst.Event.new_eos())
+                return False
+            return True
+
+        GLib.timeout_add(100, stop_when_requested)
     try:
         loop.run()
     finally:

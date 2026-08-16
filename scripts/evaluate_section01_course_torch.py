@@ -33,6 +33,14 @@ _SEED = flags.DEFINE_integer("seed", 2026, "Evaluation seed")
 _GAIT_PHASE_OFFSET = flags.DEFINE_float(
     "gait-phase-offset", None, "Optional diagnostic reference-gait phase offset"
 )
+_BRAKE_START_Y = flags.DEFINE_float(
+    "brake-start-y", None, "Optional diagnostic override for the braking start Y"
+)
+_REFERENCE_FADE_START_Y = flags.DEFINE_float(
+    "reference-fade-start-y",
+    None,
+    "Optional diagnostic override for the nominal-gait fade start Y",
+)
 _DIAGNOSTIC_WAYPOINTS = (-1.75, 1.0, 1.55, 1.75, 2.15, 6.8, 7.8)
 
 
@@ -75,6 +83,10 @@ def main(argv):
         raw_env.cfg.training_platform_start_fraction = 0.0
     if hasattr(raw_env.cfg, "training_brake_start_fraction"):
         raw_env.cfg.training_brake_start_fraction = 0.0
+    if _BRAKE_START_Y.value is not None:
+        raw_env.cfg.brake_start_y = _BRAKE_START_Y.value
+    if _REFERENCE_FADE_START_Y.value is not None:
+        raw_env.cfg.control.reference_fade_start_y = _REFERENCE_FADE_START_Y.value
     if _EVAL_START_X_MIN.value is not None:
         raw_env.cfg.start_x_range = (
             _EVAL_START_X_MIN.value,
