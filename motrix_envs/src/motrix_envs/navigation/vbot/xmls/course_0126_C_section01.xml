@@ -8,7 +8,7 @@
 
   <default>
     <default class="collision">
-      <geom type="mesh" group="3" contype="1" conaffinity="1"/>
+      <geom type="mesh" group="3" contype="1" conaffinity="1" rgba="1 1 1 0"/>
       <default class="C_Abianjie_001">
         <geom type="box" size="0.25 3.0 1.22660493850708" quat="1.0 0.0 0.0 0.0" pos="5.25 -1.0 1.22660493850708" density="1000.0"/>
       </default>
@@ -59,7 +59,7 @@
         <geom class="C_Adiban_005"/>
       </body>
       <body name="B_Adixing" pos="0.0 0.0 0.0" quat="1.0 0.0 0.0 0.0">
-        <geom name="V_Adixing_Plane" type="hfield" hfield="hfield_terrain" pos="0 0 0" quat="1 0 0 0" group="3" contype="1" conaffinity="1" friction="0.8" solref="0.02 1" condim="3"/>
+        <geom name="V_Adixing_Plane" type="hfield" hfield="hfield_terrain" pos="0 0 0" quat="1 0 0 0" group="3" contype="1" conaffinity="1" friction="0.8" solref="0.02 1" condim="3" rgba="1 1 1 0"/>
       </body>
     </body>
   </worldbody>

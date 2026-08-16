@@ -162,37 +162,37 @@ class VBotSection01FullCfg(VBotSection01Cfg):
     enable_height_scan: bool = True
 
 
-@registry.envcfg("vbot-section01-peer-xy-s1-course")
+@registry.envcfg("vbot-section01-xy-s1-course")
 @dataclass
-class VBotSection01PeerXYS1Cfg(VBotSection01S1Cfg):
+class VBotSection01XYS1Cfg(VBotSection01S1Cfg):
     """S1 with only the formal X/Y spawn distribution added."""
 
     start_x_range: tuple[float, float] = (-0.5, 0.5)
     start_y_range: tuple[float, float] = (-2.9, -2.0)
 
 
-@registry.envcfg("vbot-section01-peer-xy-s2-course")
+@registry.envcfg("vbot-section01-xy-s2-course")
 @dataclass
-class VBotSection01PeerXYS2Cfg(VBotSection01S2Cfg):
+class VBotSection01XYS2Cfg(VBotSection01S2Cfg):
     """S2 with the same formal X/Y spawn distribution as evaluation."""
 
     start_x_range: tuple[float, float] = (-0.5, 0.5)
     start_y_range: tuple[float, float] = (-2.9, -2.0)
 
 
-@registry.envcfg("vbot-section01-peer-xy-s3a-course")
+@registry.envcfg("vbot-section01-xy-s3a-course")
 @dataclass
-class VBotSection01PeerXYS3aCfg(VBotSection01S3aCfg):
+class VBotSection01XYS3aCfg(VBotSection01S3aCfg):
     """S3a with position jitter on the local ramp-approach reset."""
 
     s3a_start_x_range: tuple[float, float] = (-0.5, 0.5)
     s3a_start_y_range: tuple[float, float] = (0.9, 1.1)
 
 
-@registry.envcfg("vbot-section01-peer-xy-full-course")
+@registry.envcfg("vbot-section01-xy-full-course")
 @dataclass
-class VBotSection01PeerXYFullCfg(VBotSection01FullCfg):
-    """Full peer curriculum with random formal X/Y and fixed heading."""
+class VBotSection01XYFullCfg(VBotSection01FullCfg):
+    """Full curriculum with random formal X/Y and fixed heading."""
 
     start_x_range: tuple[float, float] = (-0.5, 0.5)
     start_y_range: tuple[float, float] = (-2.9, -2.0)
@@ -230,7 +230,7 @@ class VBotSection01RandomX10Mix75Cfg(VBotSection01RandomX10Cfg):
 
 @dataclass
 class VBotSection01DirectCfg(VBotSection01FullCfg):
-    """Direct joint-target policy matching the peer-validated random-spawn structure."""
+    """Direct joint-target policy for the random-spawn curriculum."""
 
     max_episode_seconds: float = 40.0
     use_full_course_local_starts: bool = False
@@ -553,10 +553,10 @@ class VBotSection01RandomXYYawStableCfg(VBotSection01RandomXYYawCfg):
     )
 
 
-@registry.envcfg("vbot-section01-peer-xy-yaw-stable-v2-course")
+@registry.envcfg("vbot-section01-xy-yaw-stable-v2-course")
 @dataclass
-class VBotSection01PeerXYYawStableV2Cfg(VBotSection01RandomXYYawStableCfg):
-    """Strict one-second stop with peer-inspired braking curriculum."""
+class VBotSection01XYYawStableV2Cfg(VBotSection01RandomXYYawStableCfg):
+    """Strict one-second stop with a platform braking curriculum."""
 
     brake_start_y: float = 5.8
     brake_min_speed: float = 0.05
@@ -573,9 +573,9 @@ class VBotSection01PeerXYYawStableV2Cfg(VBotSection01RandomXYYawStableCfg):
     )
 
 
-@registry.envcfg("vbot-section01-peer-xy-yaw-stable-v3-course")
+@registry.envcfg("vbot-section01-xy-yaw-stable-v3-course")
 @dataclass
-class VBotSection01PeerXYYawStableV3Cfg(VBotSection01PeerXYYawStableV2Cfg):
+class VBotSection01XYYawStableV3Cfg(VBotSection01XYYawStableV2Cfg):
     """Fade the nominal gait into the standing pose as the command reaches zero."""
 
     control: ControlConfig = field(
@@ -583,9 +583,9 @@ class VBotSection01PeerXYYawStableV3Cfg(VBotSection01PeerXYYawStableV2Cfg):
     )
 
 
-@registry.envcfg("vbot-section01-peer-xy-yaw-stable-v4-course")
+@registry.envcfg("vbot-section01-xy-yaw-stable-v4-course")
 @dataclass
-class VBotSection01PeerXYYawStableV4Cfg(VBotSection01PeerXYYawStableV2Cfg):
+class VBotSection01XYYawStableV4Cfg(VBotSection01XYYawStableV2Cfg):
     """Enter the platform with the proven gait, then fade to a standing pose."""
 
     brake_start_y: float = 6.9
@@ -598,17 +598,17 @@ class VBotSection01PeerXYYawStableV4Cfg(VBotSection01PeerXYYawStableV2Cfg):
     )
 
 
-@registry.envcfg("vbot-section01-peer-xy-yaw-stable-v4-50-course")
+@registry.envcfg("vbot-section01-xy-yaw-stable-v4-50-course")
 @dataclass
-class VBotSection01PeerXYYawStableV450Cfg(VBotSection01PeerXYYawStableV4Cfg):
+class VBotSection01XYYawStableV450Cfg(VBotSection01XYYawStableV4Cfg):
     """Final acceptance variant requiring 50 consecutive stable control steps."""
 
     stable_hold_seconds: float = 0.5
 
 
-@registry.envcfg("vbot-section01-peer-xy-yaw-stable-v5-course")
+@registry.envcfg("vbot-section01-xy-yaw-stable-v5-course")
 @dataclass
-class VBotSection01PeerXYYawStableV5Cfg(VBotSection01PeerXYYawStableV4Cfg):
+class VBotSection01XYYawStableV5Cfg(VBotSection01XYYawStableV4Cfg):
     """Fade the locomotion residual after the robot enters the platform."""
 
     control: ControlConfig = field(
@@ -620,9 +620,9 @@ class VBotSection01PeerXYYawStableV5Cfg(VBotSection01PeerXYYawStableV4Cfg):
     )
 
 
-@registry.envcfg("vbot-section01-peer-xy-yaw-stable-v6-course")
+@registry.envcfg("vbot-section01-xy-yaw-stable-v6-course")
 @dataclass
-class VBotSection01PeerXYYawStableV6Cfg(VBotSection01PeerXYYawStableV4Cfg):
+class VBotSection01XYYawStableV6Cfg(VBotSection01XYYawStableV4Cfg):
     """Retain a small residual authority for balance after the gait fades."""
 
     control: ControlConfig = field(

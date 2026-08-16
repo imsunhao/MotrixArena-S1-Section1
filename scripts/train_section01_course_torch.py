@@ -20,14 +20,14 @@ import motrix_envs.navigation.vbot  # noqa: F401 - register course environments
 import motrix_rl.skrl as skrl_root
 from motrix_rl.skrl.torch.train import ppo
 
-from section01_course_torch_config import COURSE_ENVS, PEER_CURRICULUM_STAGE_STEPS
+from section01_course_torch_config import COURSE_ENVS, CURRICULUM_STAGE_STEPS
 
 _ENV = flags.DEFINE_enum("env", COURSE_ENVS[0], COURSE_ENVS, "Curriculum stage")
 _NUM_ENVS = flags.DEFINE_integer("num-envs", 1024, "Parallel environments")
 _STAGE_STEPS = flags.DEFINE_integer(
     "stage-steps",
     None,
-    "Vectorized control steps; peer curriculum environments use their verified default",
+    "Vectorized control steps; curriculum environments use their stage default",
 )
 _CHECKPOINT_INTERVAL = flags.DEFINE_integer(
     "checkpoint-interval", 400, "Checkpoint interval in vectorized control steps"
@@ -61,7 +61,7 @@ def main(argv):
     del argv
     stage_steps = _STAGE_STEPS.value
     if stage_steps is None:
-        stage_steps = PEER_CURRICULUM_STAGE_STEPS.get(_ENV.value)
+        stage_steps = CURRICULUM_STAGE_STEPS.get(_ENV.value)
     if stage_steps is None or stage_steps <= 0:
         raise app.UsageError(
             "--stage-steps must be positive for environments without a curriculum default"

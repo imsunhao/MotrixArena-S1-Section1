@@ -55,14 +55,22 @@ class NpRenderer:
 
         self._env = env
         self._render = RenderApp()
-        settings = RenderSettings.performance()
-        settings.enable_shadow = True  # disable shadow for better performance
+        if os.environ.get("MOTRIX_RECORDING_QUALITY", "0") == "1":
+            settings = RenderSettings.quality()
+        else:
+            settings = RenderSettings.performance()
+            settings.enable_shadow = True
         self._render.launch(
             env.model,
             batch=render_batch,
             render_offset=offsets,
             render_settings=settings,
         )
+        if (
+            os.environ.get("MOTRIX_HIDE_COLLISION_GEOMS", "0") == "1"
+            and hasattr(self._render.opt, "set_group_vis")
+        ):
+            self._render.opt.set_group_vis(3, False)
         self._sync_render_data = True
         self._render.system_camera.active = self._sync_render_data
         self._ready_file = os.environ.get("MOTRIX_RENDER_READY_FILE")

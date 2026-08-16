@@ -10,13 +10,15 @@ SEED=${3:-2026}
 SKIP_EPISODES=${4:-7}
 GPU=${5:-0}
 RECORD_SECONDS=${6:-65}
-ENV_NAME=${7:-vbot-section01-peer-xy-yaw-stable-v4-course}
+ENV_NAME=${7:-vbot-section01-xy-yaw-stable-v4-50-course}
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 PYTHON=${SECTION01_TORCH_PYTHON:-python3}
 
 mkdir -p "$(dirname "$OUTPUT")"
 export PYTHONPATH="$ROOT/motrix_envs/src:$ROOT/motrix_rl/src"
 export MOTRIX_FOLLOW_CAMERA=1
+export MOTRIX_HIDE_COLLISION_GEOMS=1
+export MOTRIX_RECORDING_QUALITY=1
 export MOTRIX_PLAY_START_DELAY_SECONDS=2
 export CUDA_VISIBLE_DEVICES="$GPU"
 export DISPLAY=:98

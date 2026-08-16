@@ -1,4 +1,4 @@
-"""Shared PPO configuration for the peer-structure Section01 reproduction."""
+"""Shared PPO configuration for the Section01 curriculum."""
 
 from dataclasses import dataclass
 
@@ -11,10 +11,10 @@ COURSE_ENVS = (
     "vbot-section01-s2-terrain-course",
     "vbot-section01-s3a-uphill-course",
     "vbot-section01-full-course-v2-train",
-    "vbot-section01-peer-xy-s1-course",
-    "vbot-section01-peer-xy-s2-course",
-    "vbot-section01-peer-xy-s3a-course",
-    "vbot-section01-peer-xy-full-course",
+    "vbot-section01-xy-s1-course",
+    "vbot-section01-xy-s2-course",
+    "vbot-section01-xy-s3a-course",
+    "vbot-section01-xy-full-course",
     "vbot-section01-full-random-x-course",
     "vbot-section01-full-random-x10-course",
     "vbot-section01-full-random-x25-course",
@@ -55,12 +55,12 @@ COURSE_ENVS = (
     "vbot-section01-full-random-xy-course",
     "vbot-section01-full-random-xy-yaw-course",
     "vbot-section01-full-random-xy-yaw-stable-course",
-    "vbot-section01-peer-xy-yaw-stable-v2-course",
-    "vbot-section01-peer-xy-yaw-stable-v3-course",
-    "vbot-section01-peer-xy-yaw-stable-v4-course",
-    "vbot-section01-peer-xy-yaw-stable-v4-50-course",
-    "vbot-section01-peer-xy-yaw-stable-v5-course",
-    "vbot-section01-peer-xy-yaw-stable-v6-course",
+    "vbot-section01-xy-yaw-stable-v2-course",
+    "vbot-section01-xy-yaw-stable-v3-course",
+    "vbot-section01-xy-yaw-stable-v4-course",
+    "vbot-section01-xy-yaw-stable-v4-50-course",
+    "vbot-section01-xy-yaw-stable-v5-course",
+    "vbot-section01-xy-yaw-stable-v6-course",
     "vbot-section01-full-random-x-route-v2-course",
     "vbot-section01-full-random-xy-route-v2-course",
     "vbot-section01-full-random-xy-yaw-route-v2-course",
@@ -70,21 +70,21 @@ COURSE_ENVS = (
     "vbot-section01-full-random-x-phase-medium-v3-course",
 )
 
-PEER_CURRICULUM_STAGE_STEPS = {
+CURRICULUM_STAGE_STEPS = {
     "vbot-section01-s1-velocity-course": 9600,
     "vbot-section01-s2-terrain-course": 16000,
     "vbot-section01-s3a-uphill-course": 16000,
     "vbot-section01-full-course-v2-train": 6400,
-    "vbot-section01-peer-xy-s1-course": 9600,
-    "vbot-section01-peer-xy-s2-course": 16000,
-    "vbot-section01-peer-xy-s3a-course": 16000,
-    "vbot-section01-peer-xy-full-course": 6400,
-    "vbot-section01-peer-xy-yaw-stable-v2-course": 6400,
-    "vbot-section01-peer-xy-yaw-stable-v3-course": 6400,
-    "vbot-section01-peer-xy-yaw-stable-v4-course": 6400,
-    "vbot-section01-peer-xy-yaw-stable-v4-50-course": 6400,
-    "vbot-section01-peer-xy-yaw-stable-v5-course": 6400,
-    "vbot-section01-peer-xy-yaw-stable-v6-course": 6400,
+    "vbot-section01-xy-s1-course": 9600,
+    "vbot-section01-xy-s2-course": 16000,
+    "vbot-section01-xy-s3a-course": 16000,
+    "vbot-section01-xy-full-course": 6400,
+    "vbot-section01-xy-yaw-stable-v2-course": 6400,
+    "vbot-section01-xy-yaw-stable-v3-course": 6400,
+    "vbot-section01-xy-yaw-stable-v4-course": 6400,
+    "vbot-section01-xy-yaw-stable-v4-50-course": 6400,
+    "vbot-section01-xy-yaw-stable-v5-course": 6400,
+    "vbot-section01-xy-yaw-stable-v6-course": 6400,
 }
 
 DIRECT_ENVS = {
