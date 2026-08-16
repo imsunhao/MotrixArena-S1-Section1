@@ -29,6 +29,16 @@ _SKIP_EPISODES = flags.DEFINE_integer(
 _MAX_STEPS = flags.DEFINE_integer(
     "max-steps", 12000, "Safety limit for the captured episode"
 )
+_MIN_STABLE_STEPS = flags.DEFINE_integer(
+    "min-stable-steps",
+    100,
+    "Minimum consecutive stable control steps required for recording",
+)
+_MIN_FINAL_Y = flags.DEFINE_float(
+    "min-final-y",
+    7.3,
+    "Minimum terminal Y required to show the robot clearly inside the platform",
+)
 
 
 def _done(value: torch.Tensor) -> bool:
@@ -41,6 +51,8 @@ def main(argv):
         raise app.UsageError("--policy and --output are required")
     if _SKIP_EPISODES.value < 0:
         raise app.UsageError("--skip-episodes must be non-negative")
+    if _MIN_STABLE_STEPS.value <= 0:
+        raise app.UsageError("--min-stable-steps must be positive")
 
     config.torch.backend = "torch"
     set_seed(_SEED.value)
@@ -110,8 +122,18 @@ def main(argv):
 
     if result is None:
         raise RuntimeError("captured episode did not produce a terminal result")
-    if not result["stable_success"]:
-        raise RuntimeError(f"requested episode is not a stable success: {result}")
+    if (
+        not result["stable_success"]
+        or result["max_stable_steps"] < _MIN_STABLE_STEPS.value
+        or result["final_y"] < _MIN_FINAL_Y.value
+    ):
+        raise RuntimeError(
+            "requested episode does not satisfy the recording acceptance gate: "
+            f"min_stable_steps={_MIN_STABLE_STEPS.value}, "
+            f"min_final_y={_MIN_FINAL_Y.value}, result={result}"
+        )
+    result["required_stable_steps"] = _MIN_STABLE_STEPS.value
+    result["required_final_y"] = _MIN_FINAL_Y.value
 
     output = Path(_OUTPUT.value)
     output.parent.mkdir(parents=True, exist_ok=True)

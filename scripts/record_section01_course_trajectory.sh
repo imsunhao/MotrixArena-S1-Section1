@@ -8,7 +8,7 @@ TRAJECTORY=${1:?captured trajectory is required}
 OUTPUT=${2:?output path is required}
 GPU=${3:-0}
 RECORD_SECONDS=${4:-110}
-ENV_NAME=${5:-vbot-section01-xy-yaw-stable-v4-50-course}
+ENV_NAME=${5:-vbot-section01-xy-yaw-stable-v4-course}
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 PYTHON=${SECTION01_REPLAY_PYTHON:-python3}
 
@@ -53,7 +53,7 @@ sleep 2
   --env="$ENV_NAME" \
   --trajectory="$TRAJECTORY" \
   --fps=100 \
-  --hold-seconds=2 >"$PLAY_LOG" 2>&1 &
+  --hold-seconds=5 >"$PLAY_LOG" 2>&1 &
 PLAY_PID=$!
 
 for _ in $(seq 1 300); do

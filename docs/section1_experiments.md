@@ -2,7 +2,7 @@
 
 ## 项目目标
 
-本项目训练 VBot 从正式出生范围 `x∈[-0.5,0.5]`、`y∈[-2.9,-2.0]` 出发，穿越 Section1 坑洼和坡面，踏上 2026 平台并连续稳定 50 个 100 Hz 控制步。最终权重均由本项目在 T4 GPU 上重新训练。
+本项目训练 VBot 从正式出生范围 `x∈[-0.5,0.5]`、`y∈[-2.9,-2.0]` 出发，穿越 Section1 坑洼和坡面，踏上 2026 平台并连续稳定 100 个 100 Hz 控制步。最终权重均由本项目在 T4 GPU 上重新训练。
 
 ## 实验周期
 
@@ -14,7 +14,7 @@
 | 分段策略与交接实验 | 8 月 11 日至 12 日 | 局部坡面和平台策略有效，但正式出生端到端交接不稳定 |
 | 前段坑洼专项调试 | 8 月 13 日至 14 日 | 平地直行改善，坑洼出口仍频繁跌倒，未形成可重复完整路线 |
 | 统一 Torch 课程 | 8 月 15 日 | 固定起点完整路线通过，开始逐级增加出生扰动 |
-| 正式验收与录制 | 8 月 16 日 | random XY、yaw 和 stable-50 均得到正式评估证据 |
+| 正式验收与录制 | 8 月 16 日 | random XY、yaw 和 stable-100 均得到正式评估证据 |
 
 ## 主要碰壁过程
 
@@ -33,9 +33,9 @@
 | S3a | `vbot-section01-xy-s3a-course` | 16,000 | 坡前局部位置扰动 |
 | full | `vbot-section01-xy-full-course` | 6,400 | 正式出生完整路线 |
 | yaw | `vbot-section01-full-random-xy-yaw-course` | 零样本验收 | `±0.15 rad` 初始航向扰动 |
-| stable-50 | `vbot-section01-xy-yaw-stable-v4-50-course` | 平台刹停课程 | 连续稳定 50 个控制步 |
+| stable-100 | `vbot-section01-xy-yaw-stable-v4-course` | 平台刹停课程 | 连续稳定 100 个控制步 |
 
-PPO 使用 `1024` 个并行环境，策略与价值网络均为 `512-256-128`，`rollouts=24`、`learning_epochs=5`、`mini_batches=8`、初始 `learning_rate=3e-4`。最终 checkpoint 的 optimizer 记录与该配置一致，保存时调度后的学习率为约 `5.93e-5`。控制周期为 `0.01 s`，稳定 50 步对应 `0.5 s`。
+PPO 使用 `1024` 个并行环境，策略与价值网络均为 `512-256-128`，`rollouts=24`、`learning_epochs=5`、`mini_batches=8`、初始 `learning_rate=3e-4`。最终 checkpoint 的 optimizer 记录与该配置一致，保存时调度后的学习率为约 `5.93e-5`。控制周期为 `0.01 s`，稳定 100 步对应 `1.0 s`。
 
 ## 正式评估结果
 
@@ -46,16 +46,20 @@ PPO 使用 `1024` 个并行环境，策略与价值网络均为 `512-256-128`，
 | 固定起点 | 8 | 8/8 | 不要求 | 0/8 |
 | random XY | 64 | 17/64 | 不要求 | 47/64 |
 | random XY + yaw | 64 | 18/64 | 不要求 | 46/64 |
-| random XY + yaw + stable-50 | 128 | 28/128 | 3/128 | 100/128 |
+| random XY + yaw + stable-100 | 256 | 63/256 | 4/256 | 193/256 |
 
-stable-50 的三个成功回合来自三个独立评估 seed：`2026`、`2090`、`2122`。128 回合合计 25 次超时，平均回合最大 Y 为 `2.226`，全局最大 Y 为 `7.355`。
+stable-100 的四个成功回合来自四个独立评估 seed：`2026`、`2122`、`2202`、`2204`。256 回合合计 59 次超时，平均回合最大 Y 为 `2.534`，全局最大 Y 为 `7.355`。
 
-| eval seed | 上平台 | stable-50 | 摔倒 | 超时 | mean max Y | max Y |
+| eval seed | 上平台 | stable-100 | 摔倒 | 超时 | mean max Y | max Y |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | 2026 | 7/32 | 1/32 | 25/32 | 6/32 | 2.308 | 7.343 |
 | 2058 | 6/32 | 0/32 | 26/32 | 6/32 | 2.137 | 7.250 |
-| 2090 | 5/32 | 1/32 | 27/32 | 4/32 | 1.796 | 7.324 |
+| 2090 | 5/32 | 0/32 | 27/32 | 5/32 | 1.796 | 7.324 |
 | 2122 | 10/32 | 1/32 | 22/32 | 9/32 | 2.664 | 7.355 |
+| 2201 | 4/32 | 0/32 | 28/32 | 4/32 | 2.124 | 7.276 |
+| 2202 | 10/32 | 1/32 | 22/32 | 9/32 | 2.988 | 7.325 |
+| 2203 | 12/32 | 0/32 | 20/32 | 12/32 | 3.388 | 7.297 |
+| 2204 | 9/32 | 1/32 | 23/32 | 8/32 | 2.864 | 7.347 |
 
 ## 最终产物
 
@@ -71,15 +75,14 @@ SHA-256：
 
 - `artifacts/evaluations/course_torch/section1_xy_formal/`
 - `artifacts/evaluations/course_torch/section1_xy_yaw_formal/`
-- `artifacts/evaluations/course_torch/section1_xy_yaw_stable50_formal/`
-- `artifacts/evaluations/course_torch/section1_xy_yaw_stable100_control/`
+- `artifacts/evaluations/course_torch/section1_xy_yaw_stable100_formal/`
 
 三个随机 X/Y 成功视频：
 
-| eval seed | 回合 | 正式随机起点 `(x, y)` | 稳定步数 | 视频 |
-| ---: | ---: | --- | ---: | --- |
-| 2026 | 8 | `(-0.2681, -2.7907)` | 100 | `artifacts/videos/section1_random_xy_seed2026_success.webm` |
-| 2090 | 4 | `(0.2194, -2.8190)` | 50 | `artifacts/videos/section1_random_xy_seed2090_success.webm` |
-| 2122 | 21 | `(0.4792, -2.8136)` | 50 | `artifacts/videos/section1_random_xy_seed2122_success.webm` |
+| eval seed | 回合 | 正式随机起点 `(x, y)` | 终点 Y | 稳定步数 | 时长 | 视频 |
+| ---: | ---: | --- | ---: | ---: | ---: | --- |
+| 2026 | 8 | `(-0.2681, -2.7907)` | `7.3245` | 100 | 69 秒 | `artifacts/videos/section1_random_xy_seed2026_stable100.webm` |
+| 2202 | 2 | `(0.1852, -2.8081)` | `7.3149` | 100 | 70 秒 | `artifacts/videos/section1_random_xy_seed2202_stable100.webm` |
+| 2122 | 21 | `(0.4792, -2.8136)` | `7.3357` | 100 | 72 秒 | `artifacts/videos/section1_random_xy_seed2122_stable100.webm` |
 
-录像使用两步式可复现流程。首先由训练时使用的 MotrixSim `0.5.0b2` 执行 checkpoint 并捕获成功回合的完整状态轨迹；随后由 MotrixSim `0.7.0` 仅做运动学回放和高质量渲染，同时隐藏 group 3 碰撞几何。这个流程不会重新计算策略动作，也不会改变成功轨迹，只解决旧版渲染器产生的点阵透明画面。对应脚本为 `scripts/capture_section01_course_torch_episode.py`、`scripts/replay_section01_course_trajectory.py` 和 `scripts/record_section01_course_trajectory.sh`。
+录像使用两步式可复现流程。首先由训练时使用的 MotrixSim `0.5.0b2` 执行 checkpoint 并捕获成功回合的完整状态轨迹；捕获脚本硬性要求连续稳定至少 100 步且终止位置 `final_y>=7.3`。随后由 MotrixSim `0.7.0` 仅做运动学回放和高质量渲染，同时隐藏 group 3 碰撞几何，并额外保持最终稳定姿态 5 秒。这个流程不会重新计算策略动作，也不会改变成功轨迹，只解决旧版渲染器产生的点阵透明画面。对应脚本为 `scripts/capture_section01_course_torch_episode.py`、`scripts/replay_section01_course_trajectory.py` 和 `scripts/record_section01_course_trajectory.sh`。

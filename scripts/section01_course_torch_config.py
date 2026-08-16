@@ -58,7 +58,6 @@ COURSE_ENVS = (
     "vbot-section01-xy-yaw-stable-v2-course",
     "vbot-section01-xy-yaw-stable-v3-course",
     "vbot-section01-xy-yaw-stable-v4-course",
-    "vbot-section01-xy-yaw-stable-v4-50-course",
     "vbot-section01-xy-yaw-stable-v5-course",
     "vbot-section01-xy-yaw-stable-v6-course",
     "vbot-section01-full-random-x-route-v2-course",
@@ -82,7 +81,6 @@ CURRICULUM_STAGE_STEPS = {
     "vbot-section01-xy-yaw-stable-v2-course": 6400,
     "vbot-section01-xy-yaw-stable-v3-course": 6400,
     "vbot-section01-xy-yaw-stable-v4-course": 6400,
-    "vbot-section01-xy-yaw-stable-v4-50-course": 6400,
     "vbot-section01-xy-yaw-stable-v5-course": 6400,
     "vbot-section01-xy-yaw-stable-v6-course": 6400,
 }

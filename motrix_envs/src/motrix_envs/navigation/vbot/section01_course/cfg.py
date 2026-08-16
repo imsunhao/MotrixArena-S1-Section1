@@ -598,14 +598,6 @@ class VBotSection01XYYawStableV4Cfg(VBotSection01XYYawStableV2Cfg):
     )
 
 
-@registry.envcfg("vbot-section01-xy-yaw-stable-v4-50-course")
-@dataclass
-class VBotSection01XYYawStableV450Cfg(VBotSection01XYYawStableV4Cfg):
-    """Final acceptance variant requiring 50 consecutive stable control steps."""
-
-    stable_hold_seconds: float = 0.5
-
-
 @registry.envcfg("vbot-section01-xy-yaw-stable-v5-course")
 @dataclass
 class VBotSection01XYYawStableV5Cfg(VBotSection01XYYawStableV4Cfg):

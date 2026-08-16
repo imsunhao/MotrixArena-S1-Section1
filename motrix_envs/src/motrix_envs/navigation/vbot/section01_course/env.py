@@ -708,7 +708,6 @@ for _name in (
     "vbot-section01-xy-yaw-stable-v2-course",
     "vbot-section01-xy-yaw-stable-v3-course",
     "vbot-section01-xy-yaw-stable-v4-course",
-    "vbot-section01-xy-yaw-stable-v4-50-course",
     "vbot-section01-xy-yaw-stable-v5-course",
     "vbot-section01-xy-yaw-stable-v6-course",
     "vbot-section01-full-random-x-route-v2-course",

@@ -10,7 +10,7 @@ SEED=${3:-2026}
 SKIP_EPISODES=${4:-7}
 GPU=${5:-0}
 RECORD_SECONDS=${6:-65}
-ENV_NAME=${7:-vbot-section01-xy-yaw-stable-v4-50-course}
+ENV_NAME=${7:-vbot-section01-xy-yaw-stable-v4-course}
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 PYTHON=${SECTION01_TORCH_PYTHON:-python3}
 
