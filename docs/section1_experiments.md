@@ -1,13 +1,53 @@
 # MotrixArena S1 Section 1 实验记录
 
+## 当前权威状态（2026-08-16）
+
+- `motrixarena` 定时任务保持暂停，训练与评估只由当前主流程执行。
+- 最终路线已切换为通过同学作业验证的 NumPy/MotrixSim 环境结构、Torch/skrl PPO、78 维观测、24 点地形扫描和四拍参考步态加 PPO residual；只参考结构，不使用同学 checkpoint、视频或最终策略。
+- 本项目固定起点、random XY、yaw 和停稳所用权重均由本项目重新训练。权威 checkpoint 为 `artifacts/checkpoints/course_torch/peer_xy_full_seed345_agent5200.pt`，SHA-256 为 `b6f667f194b50905dd5451b128838ee56b3ad1acf20460f74f4881928c460646`。
+- 最终验收门按用户最新决定改为连续稳定 50 个 100 Hz 控制步。正式随机 XY、`+-0.15 rad` yaw、四个评估 seed、128 回合中，`ever_on_platform=28/128`、`stable_success=3/128`，稳定成功来自 seed 2026、2090 和 2122。
+- 最佳录制回合来自 seed 2026 的第 8 回合。该回合实际连续稳定 100 步，因此同时满足新的 50 步门槛和旧的 100 步严格门槛。
+- 下文 2026-08-13 及以前的 JAX、handoff 和 specialist 内容保留为失败证据，不再代表当前方案。
+
+### fullbridge waypoint 结构诊断（已淘汰）
+
+为验证“在坑洼出口后补回 `y=1.2`、`y=2.25` 两个中间坡面目标”是否能改善动态出口，新增了本项目独立配置
+`vbot_locomotion_section011_reference_current_route_safe_dense_entry_fullbridge`。该线只改变
+`route_waypoint_targets`/`waypoint_y`，奖励、动作尺度、课程、终止和 PPO 均继承 dense-entry wp5；从本项目自己的
+`exitgate20_cont2e6/agent_2250` warm-start，seed=4100，`lr=2e-6`，`epochs=2`，JAX，GPU0。
+
+正式出生、seed2026、4 回合评估结果：
+
+| checkpoint | all_time_max_y | mean_episode_max_y | waypoint crossings | fall_rate | ever_on_platform_rate | stable_success_rate |
+|---:|---:|---:|---|---:|---:|---:|
+| warm-start agent_2250 | -1.113 | -1.285 | `[4,1,0,0,0,0,0,0,0]` | 50% | 0 | 0 |
+| agent_250 | -1.117 | -1.335 | `[4,2,0,0,0,0,0,0,0]` | 50% | 0 | 0 |
+| agent_500 | -1.189 | -1.286 | `[3,1,0,0,0,0,0,0,0]` | 50% | 0 | 0 |
+| agent_1000 | -1.038 | -1.255 | `[3,2,0,0,0,0,0,0,0]` | 50% | 0 | 0 |
+
+新增坡面 waypoint 后，warm-start 本身就丢失了原路线的第三 waypoint crossing；训练节点也没有恢复第三门，且平台/停稳率均为 0。结论是该修改改变了已有策略的观测/命令语义，不属于可直接迁移的最小兼容修正，整条线淘汰。当前权威候选仍为原 `exitgate20_cont2e6/agent_1000`，不可据此宣称完成。
+
+### bridge_targets 命令跳变诊断（已淘汰）
+
+为避免增加 waypoint 数量导致索引语义变化，第二条线保持原 7 个 waypoint 和 62 维观测，只修改后段目标坐标：
+`(0.6,-0.4) → (0.6,1.2) → (0.6,2.25) → (0,7.8)`，对应原有的后四个 route slot；其余配置继承 wp5。训练从 `exitgate20_cont2e6/agent_2250` warm-start，seed=4200，`lr=2e-6`，`epochs=2`。
+
+正式出生、seed2026、4 回合的 `agent_1000`：`all_time_max_y=-1.104`、`mean_episode_max_y=-1.195`、crossing `[3,2,0,0,0,0,0]`、`fall_rate=25%`、`timeout_rate=75%`、`ever_on_platform_rate=0`、`stable_success_rate=0`。相较当前权威原路线没有第三 waypoint 改善，已淘汰。
+
+### progress2 连续奖励诊断（已淘汰）
+
+第三条线完全保持原 proven route、观测、命令和 waypoint，只将 `reward_progress` 从 `1.0` 改为 `2.0`；从同一 `exitgate20_cont2e6/agent_2250` warm-start，seed=4300，`lr=2e-6`，`epochs=2`。
+
+正式出生、seed2026、4 回合的 `agent_1000`：`all_time_max_y=-1.107`、`mean_episode_max_y=-1.402`、crossing `[3,2,0,0,0,0,0]`、`fall_rate=25%`、`timeout_rate=75%`、`ever_on_platform_rate=0`、`stable_success_rate=0`。加大连续进度 credit 没有改善第三门，已淘汰。
+
 ## 任务与评估口径
 
 - 正式出生范围：`x ∈ [-0.5, 0.5]`，`y ∈ [-2.9, -2.0]`。
-- 最终目标：穿越坑洼高度场和 15° 斜坡，踏上 2026 平台并连续停稳 1 秒。
+- 最终目标：穿越坑洼高度场和 15° 斜坡，踏上 2026 平台并连续稳定 50 个控制步。
 - 主指标：`stable_success_rate`。
 - 辅助指标：`ever_on_platform_rate`。
 - 平台判定：`y >= 6.9`、`|x| <= 4.5`、基座高度 `z >= 1.55`。
-- 停稳判定：水平速度不超过 `0.25 m/s`、角速度不超过 `0.5 rad/s`、直立余弦不低于 `0.9`，连续保持 100 个 100 Hz 控制步。
+- 停稳判定：水平速度不超过 `0.25 m/s`、角速度不超过 `0.5 rad/s`、直立余弦不低于 `0.9`，连续保持 50 个 100 Hz 控制步。
 - 下表统一使用 64 个并行环境、64 个完成回合、固定评估种子 2026 和正式出生范围。
 
 ## 官方资产核验
@@ -517,3 +557,2011 @@ base → p100 handoff → post-third → ramp400 → ramp600 → ramp-top → st
 ## 早期 seed53/54 长训统一复核
 
 为避免仅凭训练 reward 保留旧线，使用当前 `scripts/evaluate_section011.py` 从正式起跑线重新评估旧 terrain 训练。seed53 的 12k/20k/30k checkpoint 最大 Y 分别为 `-1.450/-1.375/-1.329`，waypoint 回合分布分别为 `[58,6,0,0,0,0,0,0]`、`[49,15,0,0,0,0,0,0]`、`[36,28,0,0,0,0,0,0]`；三者均为 100% 跌倒、0% 平台率、0% 严格停稳率。seed54 的 12k checkpoint 最大 Y 为 `-1.472`、分布 `[61,3,0,0,0,0,0,0]`，同样 100% 跌倒；该训练实际只保存到 13k，20k/30k checkpoint 不存在。两条旧 terrain 线因此正式淘汰，不再续训。
+
+## 正式前段 frontbridge 长训
+
+当前权威前段基座为 seed343/17.5k。第一轮从该模型出发，保持正式出生、坑洼区域和 `y=1.0` 出口均在同一完整路线训练分布内；四条线只改变学习率或归一化器是否冻结。2,500-step 正式评估中，`lr=1e-5` 最优（最大 Y `1.542`、平均回合最大 Y `-0.794`、第三 waypoint 2 次、跌倒率 36.69%），`lr=5e-5` 次之；`lr=2e-5` 与冻结归一化器分支均淘汰。
+
+保留的两条线从各自 2,500 checkpoint 继续训练。累计 5,000-step 的固定 seed 2026 正式评估如下：
+
+| 配置 | 最大 Y | 平均回合最大 Y | waypoint crossings | 回合 waypoint histogram | 跌倒率 | 结论 |
+|---|---:|---:|---|---|---:|---|
+| `lr=1e-5` | **1.217** | -0.807 | `[99,23,1,0,0,0,0]` | `[0,56,17,1,0,0,0,0]` | 50.0% | 仍能穿过第三门，保留，但稳定性较 2.5k 退化 |
+| `lr=5e-5` | 0.985 | -0.825 | `[93,19,0,0,0,0,0]` | `[0,57,15,0,0,0,0,0]` | 40.3% | 无第三门改善，停止 |
+
+两条线的平台到达率和严格停稳率仍均为 0。由于已有动作幅度与 blend 区间扫描均未超过原方案，后续不重复该方向，而是检验单次 PPO 更新强度。以共同的 `lr=2e-5` 为控制，2,500-step 正式评估结果为：
+
+| 单变量配置 | 最大 Y | 平均回合最大 Y | waypoint crossings | 回合 waypoint histogram | 跌倒率 | 结论 |
+|---|---:|---:|---|---|---:|---|
+| epochs `6→2` | **1.109** | **-0.786** | `[93,24,0,0,0,0,0]` | `[0,53,19,0,0,0,0,0]` | **41.7%** | 当前最佳稳定—出口折中，保留 |
+| ratio clip `0.2→0.05` | 0.077 | -0.956 | `[94,9,0,0,0,0,0]` | `[1,68,6,0,0,0,0,0]` | 44.0% | 运动能力明显退化，停止 |
+
+下一组相邻消融使用 epochs=1，以及 `lr=1e-5 + epochs=2`；先在 2,500 checkpoint 正式筛选，再决定是否训练至 5k/10k。所有 frontbridge checkpoint 均不使用往届权重，后段已跑通的 ramp 与平台 specialist 不参与本轮训练。
+
+累计 10,000-step 的 `lr=1e-5` 主线正式评估首次明显推进到第三 waypoint 之后：最大 Y `1.954`，平均回合最大 Y `-0.481`，第三 waypoint crossings `4`，waypoint episode histogram `[0,46,33,3,0,0,0,0]`，跌倒率 `59.76%`，平台率和严格停稳率仍为 0。`epochs=1` 与 `lr=1e-5 + epochs=2` 的 2,500-step 评估最大 Y 分别为 `0.465` 与 `0.736`，均未进入第三 waypoint，因此停止 epochs=1，保留低学习率组合做稳定性对照。
+
+把主线直接切换到 post-third 的完整链时，`y=1.2→2.1` 阶段没有任何 post-third 接管，最大 Y `1.927`；插入 `p100 actual mixed` 专家并在 `y=0.8` 接管后，p100 接管 12 次，最大 Y `2.092`，但仍有 0 次 post-third 接管。当前验证的下一单变量是把 post-third 接管门从 `y=2.1` 提前到 `y=1.8`，以覆盖这批真实动态出口状态；平台仍未到达，暂不录制视频或发布成果。
+
+随后从主线 `agent_10000` 在 `y=0.8` 采集 4 个评估种子的真实动态状态，共 26 个；健康过滤后与既有 p100 数据混合得到 470 个训练状态和 59 个留出状态（动态状态 21/5）。三条 500-step p100 适配线在留出集上的结果为：冻结归一化器 `lr=1e-6` 最大 Y `1.066`、跌倒率 `26.1%`；不冻结 `lr=1e-6` 最大 Y `1.046`、跌倒率 `34.7%`；冻结 `lr=5e-7` 最大 Y `1.080`、跌倒率 `26.2%`。它们改善了局部稳定性，但没有产生平台成功。
+
+把同一真实 `y=0.8` 状态分布的 skill goal 延长到 `y=1.8` 后，两个 500-step checkpoint 的留出评估仍无 `skill_success`：`lr=1e-6` 最大 Y `1.296`、第三 waypoint 1 次、跌倒率 `33.3%`；`lr=5e-7` 最大 Y `1.144`、跌倒率 `36.8%`。这不是完成证据，因此继续从最佳 `lr=1e-6` checkpoint 延长训练，直到 2,000 step 再筛选。
+
+延长到总 2,000 step 的 `lr=1e-6` checkpoint 在 59 个留出状态上仍为 `skill_success_rate=0`，最大 Y `1.229`、跌倒率 `33.8%`；y=1.8 局部适配因此停止。将已有 `post_second_100` specialist 直接接入正式链也未改善：最大 Y `1.296`、post-second→post-third 之后的平台率和严格停稳率均为 0。
+
+当前结论是：前段策略虽然能在部分种子穿过第三 waypoint，但出口状态仍处于高角速度/低净空的不可恢复区域；局部 p100 或 post-second reset 训练不能替代正式出生下的长期稳定步态。新增的 y=0.8 handoff 环境和数据保留在仓库中，作为下一轮针对 `y=1.2→2.1` 动态交接采样的基础；不把任何极端最大 Y 或单回合上平台样本当作最终成果。
+
+补采正式 `y=1.2` 动态状态后，仅 seed2026/2027 各得到 2 个状态；健康过滤后与 post-third 数据混合形成 127 个训练状态、28 个留出状态，样本量有限。两条 500-step `p120→p225` 适配线中，`lr=1e-6` 留出评估达到 `skill_success_rate=40.6%`、最大 Y `2.31`、第三 waypoint crossings `14`，跌倒率 `59.4%`；`lr=5e-7` 未产出完整留出结果，停止。该适配器首次证明真实 y=1.2 动态状态可以被送过 2.1，但仍未经过正式出生链验证。
+
+随后使用该适配器接回正式链，32 回合中只触发 1 次 p120→p225 接管，最大 Y `1.245`，跌倒率 `100%`，平台率和严格停稳率均为 0。把 p225 接管提前到 `y=1.0` 的诊断线因 T4 初始化时未保留完整日志，不能作为有效结果。2029 留出种子未能产生 y=1.2 handoff 状态；当前可用动态样本仍不足，不继续做小数据过拟合。
+
+## y=1.2 动态交接窗口补采（2026-08-12）
+
+此前的 `y=1.2` handoff 数据只保留每个环境首次 crossing，四个评估种子合计仅有极少动态样本，局部 specialist 的成功无法迁移到正式链。为提高状态覆盖而不改变观测、奖励或验收口径，扩展 `evaluate_section011_policy_chain.py`：支持 `--handoff-y-max` 和 `--handoff-max-per-env`，在正式出生链中保留 `y=1.05..1.45` 窗口内每个环境最多 8 个连续状态。
+
+使用当前正式前段 `frontbridge_lr1e5_cont/agent_10000`、种子 2026–2029、每种子 256 回合采集。得到的窗口状态数为 117、104、112、34；正式评估本身仍没有稳定成功（平台率 2026 为 0.43%，其余为 0，严格停稳率均为 0，跌倒率约 61.7%–64.8%），因此这些数据只作为交接训练样本，不作为最终成果。使用 `upright>=0.7、angular_xy<=3.0、root_z>=0.2` 健康过滤，并与既有 `frontbridge_y120_p225_all` 混合，得到 633 个训练状态、93 个留出状态。
+
+新增窗口环境：`vbot_locomotion_section011_handoff_frontbridge_y120_p225_window_angular_forward06` 及其 test 版本。四条 specialist 对照已在 T4 启动，均从本项目既有 `y120→p225` 500-step checkpoint warm-start，只改变 PPO 学习率/epoch（`1e-6×2`、`5e-7×2`、`1e-6×1`、`2e-6×2`），每 250 batched steps 保存 checkpoint。训练完成后先用 93 个留出状态筛选，再接回正式出生端到端链；不使用任何往届 checkpoint。
+
+750-step 留出筛选淘汰了 `1e-6×2` 与 `2e-6×2`（跌倒率分别约 84.4% 与 89.1%），保留 `5e-7×2` 和 `1e-6×1`。累计 1000-step 留出评估中，`5e-7×2` 跌倒率降至 49.4%，而 `1e-6×1` 退化至 89.1%，因此只保留前者并训练到 2000 step。该 2000-step specialist 在正式出生链（base→y1.05 window）中仅触发 3 次交接；64 回合统计为 `skill_success_rate=88.1%`、`ever_on_platform_rate=0`、`stable_success_rate=0`、跌倒率 61.9%，waypoint histogram 为 `[1,41,40,2,0,0,0,0]`。局部窗口成功没有迁移成正式路线成功，当前瓶颈仍是前段稳定、可重复到达 y≈1.05；该 specialist 不进入最终视频候选。
+## 前段运行时动作幅度扫描（2026-08-12）
+
+对权威 `frontbridge_lr1e5_cont/agent_10000` 做只读正式评估，扫描 `action_scale∈{0.05,0.055}` 与 `body_forward_speed∈{0.5,0.6}`。`0.05/0.5` 与 `0.05/0.6` 将跌倒率降到 3.1%/0%，但平均最大 Y 仅约 `-2.26/-2.19`，完全失去前进能力；`0.055/0.5`、`0.055/0.6` 也只到 `-2.24/-2.17`。降低动作幅度只能得到站立型策略，不能解决正式前段出口，未启动该方向训练。
+
+另复核已有 `frontbridge_safe_s2152/agent_500`，正式 64 回合得到 `skill_success_rate=75.6%`、`all_time_max_y=1.536`、`ever_on_platform_rate=0`、`stable_success_rate=0`、跌倒率 55.8%，waypoint histogram `[1,50,32,3,0,0,0,0]`；仍未达到最终路线验收标准。
+
+## 正式出生 gate105 稳定终点 warm-start（2026-08-12）
+
+新增 `vbot_locomotion_section011_frontbridge_gate105_stable_forward06`，只把正式出生完整路线的 skill goal 改为 `y=1.05`，并要求 `upright>=0.7、base_clearance>=0.25、angular_xy<=2.0` 连续保持 0.1 秒，同时保留原有角速度门和跌倒惩罚。四条从零训练的 2,000-step 线最大 Y 仅 `-1.54..-1.68`、跌倒率 `0..3.1%`、skill success 全为 0，说明稳定终点从零训练会退化为站立策略。
+
+随后从正式前段 `frontbridge_lr1e5_cont/agent_10000` warm-start，四条 250-step 单变量 PPO 对照的正式评估为：`lr=1e-6, epochs=2` 最大 Y `1.435`、跌倒率 `34.8%`；`lr=5e-7, epochs=2` 最大 Y `1.240`、跌倒率 `57.9%`；`lr=1e-6, epochs=1` 最大 Y `1.264`、跌倒率 `55.4%`；`lr=2e-6, epochs=1` 最大 Y `1.752`、跌倒率 `61.5%`。稳定 gate success 只有约 `1.3%`（后两条各一例），平台率与严格停稳率均为 0。当前优先保留低跌倒的 `lr=1e-6×2` 作为下一步短续训候选，不把单回合 gate 成功视为最终成果。
+## 2026-08-12 往届奖励/二维 waypoint 兼容复核
+
+对 `references/runner_up/review/vbot/vbot_section011_np.py` 逐行审查后，修正了参考 aligned 配置：恢复 9 个二维 waypoint、0.35 距离推进，以及 `tracking_goal_vel=2.0`、`tracking_yaw=0.5`、`reach_all_goal=1000`、`lin_vel_z=-0.3`、`feet_air_time=1.0`、`action_scale=0.20` 等往届最终类覆盖值。此前 v2 训练因同步路径错误，运行时未读取修正代码，结果作废。
+
+v3 四条从零训练线（aligned、reward 单变量、waypoint 单变量、hyper 单变量）均完成 2250 checkpoint。使用匹配自身环境、正式出生分布、seed=2026 的 8/16 回合评估：
+
+| 线 | all_time_max_y | mean_episode_max_y | fall_rate | waypoint | ever_on_platform_rate | stable_success_rate |
+|---|---:|---:|---:|---|---:|---:|
+| aligned | -1.839 | -2.735 | 1.000 | 0/9 | 0 | 0 |
+| reward | -1.951 | -2.340 | 1.000 | 0/9 | 0 | 0 |
+| waypoint | -1.621 | -2.021 | 1.000 | 0/7 | 0 | 0 |
+| hyper | -1.902 | 无完成回合 | 0（未完成回合） | 0/9 | 0 | 0 |
+
+结论：修正后的往届奖励/waypoint 结构在当前框架仍未产生可用 locomotion；四条线全部淘汰，不续训，不接后段链，不录制或提交视频。该证据指向更底层的训练模式、reset/command API 或物理初始化差异，不能靠继续增加 step 解决。
+## 2026-08-12 当前路线安全底座与往届奖励迁移
+
+只读评估此前本项目的 `integrated_forward06_no_skill` checkpoint，正式出生 seed2026 得到 `all_time_max_y=-1.423`、`mean_episode_max_y=-1.516`、`fall_rate=1.0`，但第一 waypoint crossing 3 次。这证明当前物理/动作接口并非完全失效，安全地形 action-scale blend、角速度稳定 gate 和混合出生 curriculum 对早期探索有价值。
+
+据此建立 `vbot_locomotion_section011_reference_curriculum_safe`：继承本项目已验证的安全 curriculum，只替换往届核心奖励和 9 waypoint bookkeeping；不使用往届 checkpoint 作为成果，仅使用本项目 checkpoint 做迁移诊断。随后建立 current-route 7-gate 对照，保留当前坑洼/坡面路线但采用往届奖励。
+
+| 线 | checkpoint | 正式 seed2026 结果 | 结论 |
+|---|---|---|---|
+| safe aligned | 2250 | 最大 Y -1.137，跌倒率 100%，0 waypoint | 淘汰 |
+| safe lr=5e-6 | 2250 | 最大 Y -1.047，跌倒率 100%，0 waypoint | 淘汰 |
+| safe epochs=1 | 2250 | 最大 Y -1.133，跌倒率 29.4%，0 waypoint | 暂不延长 |
+| safe lr=2e-5 | 2250 | 最大 Y -1.207，跌倒率 12.5%，0 waypoint | 作为 route warm-start |
+| current-route from lr2e-5 | 2250 | 最大 Y -1.296，跌倒率 0%，waypoint `[8,0,0,0,0,0,0]` | 保留 |
+| current-route continuation | 3500 | 最大 Y -1.178，跌倒率 22.2%，waypoint `[8,0,0,0,0,0,0]` | 当前权威候选 |
+| current-route lr=5e-6 continuation | 3500 | 最大 Y -0.966，跌倒率 50%，waypoint `[8,0,0,0,0,0,0]` | 前进改善但退化，淘汰 |
+| late action-scale blend | 2250 | 最大 Y -1.178，跌倒率 55.6%，waypoint `[8,0,0,0,0,0,0]` | 淘汰 |
+
+截至本记录，正式出生下尚未出现第二 waypoint 稳定 crossing，更未出现 `ever_on_platform_rate>0` 或 `stable_success_rate>0`。因此不接入后段链、不录制最终视频、不推送 GitHub、不更新飞书最终交付链接。
+
+### 当前候选的 action-scale 只读扫描
+
+对 `current_route_cont2/agent_3500` 从正式出生做评估，仅覆盖 action-scale，不修改 checkpoint：
+
+| 评估覆盖 | 最大 Y | 跌倒率 | 首 waypoint crossing |
+|---|---:|---:|---:|
+| 原始 0.17→0.20 blend | -1.184 | 66.7%（该次 8 回合） | 8/8 |
+| 固定 0.16 | -1.293 | 25% | 6/8 |
+| 固定 0.18 | -1.270 | 100% | 7/8 |
+| terrain endpoint 0.1975 | -1.021 | 75% | 8/8 |
+
+按稳定性优先级，原始 blend 是当前权威候选；endpoint 0.1975 只提高前冲、明显增加摔倒，淘汰。所有结果仍为平台率 0、停稳率 0，禁止进入完整链和交付阶段。
+
+### formal90 课程迁移
+
+从 `current_route_cont2/agent_3500` 迁移到 90% 正式出生、10% 坑洼入口的 `formal90` 配置，四个正式 seed 结果如下：
+
+| seed | 最大 Y | 平均最大 Y | 跌倒率 | waypoint histogram |
+|---:|---:|---:|---:|---|
+| 2026 | -1.224 | -1.489 | 30.0% | `[2,8,0,0,0,0,0,0,0,0]` |
+| 2027 | -0.976 | -1.328 | 25.0% | `[0,8,0,0,0,0,0,0,0,0]` |
+| 2028 | -1.370 | -1.835 | 62.5% | `[5,3,0,0,0,0,0,0,0,0]` |
+| 2029 | -1.040 | -1.610 | 37.5% | `[3,5,0,0,0,0,0,0,0,0]` |
+
+该迁移稳定重复通过第一个当前 route gate，但第二 gate（约 y=-0.6）仍为 0，平台率和停稳率均为 0；继续研究第二门出口，暂不接后段链或交付。
+
+formal90 从该 checkpoint 继续训练 2250 相对更新后，seed2026 退化为最大 Y `-1.157`、平均最大 Y `-1.702`、跌倒率 `100%`，waypoint histogram `[5,3,0,0,0,0,0,0,0,0]`；第二 gate 仍为 0。因此 formal90 continuation 已停止并淘汰，当前不再继续加深同一 PPO 线。
+
+### dense-entry waypoint 几何实验
+
+只改变前段 waypoint 几何，将入口目标从 `(-1.1,-0.4)` 稠密为 `(-1.1,-0.9,-0.7,-0.4)`，其他 reward、PPO、curriculum、action-scale 和观测均保持不变。由 `current_route_cont2/agent_3500` warm-start 得到 `dense_entry_from3500/agent_2250`。
+
+| seed | 最大 Y | 平均最大 Y | 跌倒率 | waypoint crossing counts | histogram |
+|---:|---:|---:|---:|---|---|
+| 2026 | -1.197 | -1.574 | 55.6% | `[9,1,0,0,0,0,0]` | `[3,5,1,0,0,0,0,0]` |
+| 2027 | -1.158 | -1.395 | 0% | `[6,1,0,0,0,0,0]` | `[1,6,1,0,0,0,0,0]` |
+| 2028 | -1.126 | -1.647 | 55.6% | `[5,2,0,0,0,0,0]` | `[4,4,1,0,0,0,0,0]` |
+| 2029 | -1.264 | -1.809 | 100% | `[8,0,0,0,0,0,0]` | `[6,2,0,0,0,0,0,0]` |
+
+这是首次在三个正式 seed 中观察到第二 waypoint crossing，但跨 seed 方差仍大，平台率和停稳率均为 0；dense-entry 保留继续训练，不进入交付流程。
+
+### dense-entry 低学习率 continuation
+
+从 dense-entry `agent_2250` 以 `learning_rate=2e-6`、`epochs=2` 继续训练，正式 seed2026 首次出现第三 waypoint crossing：
+
+| seed | 最大 Y | 平均最大 Y | 跌倒率 | crossing counts | histogram |
+|---:|---:|---:|---:|---|---|
+| 2026 | -0.833 | -1.320 | 55.6% | `[9,2,1,0,0,0,0]` | `[1,6,1,1,0,0,0,0]` |
+| 2027 | -1.059 | -1.439 | 55.6% | `[7,3,0,0,0,0,0]` | `[2,5,2,0,0,0,0,0]` |
+| 2028 | -1.072 | -1.478 | 100% | `[8,3,0,0,0,0,0]` | `[3,3,2,0,0,0,0,0]` |
+| 2029 | -1.291 | -1.600 | 25.0% | `[7,0,0,0,0,0,0]` | `[3,5,0,0,0,0,0,0]` |
+
+第二门在 2026/2027/2028 重复出现，第三门只在 2026 出现一次；尚未达到平台率或停稳成功门槛，继续以 dense-entry 为主线。
+
+### checkpoint 节点选择
+
+对 dense-entry `lr=2e-6` continuation 的中间节点扫描发现最终节点并非最优：相对节点 1000 在 seed2026 的跌倒率为 25%、第二 gate 1 次、最大 Y `-0.935`；节点 1500 跌倒率 37.5%、第二 gate 0 次；节点 2250 跌倒率 55.6%、第二 gate 2 次、第三 gate 1 次。进一步对节点1000做正式 seed复核：
+
+| seed | 最大 Y | 跌倒率 | 第二 gate crossing | 第三 gate crossing |
+|---:|---:|---:|---:|---:|
+| 2026 | -0.935 | 25.0% | 1 | 0 |
+| 2027 | -1.107 | 12.5% | 1 | 0 |
+| 2028 | -1.064 | 44.4% | 3 | 0 |
+| 2029 | -1.364 | 25.0% | 0 | 0 |
+
+因此当前权威 checkpoint 暂定为 dense-entry continuation 的 `agent_1000`，优先级依据稳定性和 waypoint，而非最终训练步数或最大单次前冲。
+
+从该节点再以 `learning_rate=1e-6, epochs=2` 续训至相对 1000，seed2026 退化为最大 Y `-1.226`、跌倒率 `37.5%`、第二 gate crossing `0`；该保守续训停止。当前保留节点1000本身，不把后续步数默认视为更优。
+
+### waypoint reward=5 单变量实验
+
+在 dense-entry 节点1000基础上只增加 `reward_waypoint=5`，其余设置不变。正式 seed2026 的 2250 checkpoint：最大 Y `-0.857`、跌倒率 `25%`、crossing `[8,3,1,0,0,0,0]`，首次出现第三 gate crossing。四 seed复核：
+
+| seed | 最大 Y | 跌倒率 | 第二 gate | 第三 gate |
+|---:|---:|---:|---:|---:|
+| 2026 | -0.857 | 25.0% | 3 | 1 |
+| 2027 | -1.116 | 25.0% | 1 | 0 |
+| 2028 | -1.180 | 66.7% | 2 | 0 |
+| 2029 | -1.128 | 63.6% | 2 | 0 |
+
+`reward_waypoint=5` 让第二 gate 在四个 seed 中均出现，但第三 gate 尚未跨 seed 稳定；平台率和停稳率仍为 0，继续以 wp5 为当前主线。
+
+`reward_waypoint=2` 对照从同一节点1000 warm-start，seed2026 的 2250 checkpoint 退化为最大 Y `-1.051`、跌倒率 `100%`、crossing `[7,1,0,0,0,0,0]`；低于 wp5 结果，已淘汰。
+
+`reward_waypoint=10` 对照从同一节点1000 warm-start，seed2026 的 2250 checkpoint 为最大 Y `-1.059`、跌倒率 `50%`、crossing `[10,2,0,0,0,0,0]`；第三 gate 为 0，低于 wp5，已淘汰。当前保留 wp5=5。
+
+### route command 误配复盘与 v2 四线
+
+复核往届 `_update_waypoint_nav_commands` 后确认，之前的 reference-aligned 兼容配置把 `route_drives_commands=False`，训练时实际始终朝最终平台命令，不能算往届 waypoint-nav 对齐；这解释了长训节点仍站立但没有 waypoint crossing。已做最小修正：`route_drives_commands=True`、`progress_uses_route_target=True`，让当前 ordered waypoint 同时驱动局部速度命令和目标方向进度奖励，不改变观测维度、平台统计或早停逻辑。
+
+基于修正配置从零启动 v2 四线（GPU0–3，seed3200–3203）：完全对齐、仅奖励、仅 Section1 waypoint command、仅 PPO 超参数。此前 final-target 四线结果保留为诊断，不再作为完全对齐证据；v2 线按相对 250/500/1000/2000/… 节点重新正式出生评估。
+
+v2 评估（agent2250，正式 seed2026，8回合）仍未通过：奖励线和 waypoint 线均 100% 跌倒、waypoint 全0；完全对齐线无跌倒但 3000 控制步未完成任何回合，最大 Y `-2.044`、waypoint 全0。进一步逐行对照发现首个 waypoint 顺序误配：往届真实列表首点为 `(0,0)`，随后才是 `(-3,0)`；当前误以 `(-3,0)` 起步会让正式出生立即横向急转。已修正为往届顺序并启动 v3 四线（seed3300–3303），此前 v2 线停止。
+
+v3 的 waypoint 顺序修正后，完全对齐线在正式 seed2026、8 回合仍 `fall_rate=100%`、`all_time_max_y=-1.753`、waypoint 全 0；奖励线在 3000 步内无完成回合、最大 Y `-1.930`；waypoint 变体完成 2 回合但均跌倒，`all_time_max_y=-1.490`、waypoint 全 0。相较 v2 的 `-1.95` 左右，waypoint 变体前进有所改善，但仍未跨过首个正式门，三条线均不满足继续接链条件。
+
+当前恢复此前唯一在正式多 seed 中重复跨过第二门的 `dense_entry_wp5` 作为权威基线，从其 `agent_2250` 以 `lr=1e-5, epochs=3`、seed3400 单线延续；目标是观察低强度更新是否保留已学前段行为并改善出口，不引入新的 handoff specialist 或早停门。
+
+权威延续 `agent_1000` 正式 seed2026 结果：`all_time_max_y=-1.168`、`mean_episode_max_y=-1.527`、`fall_rate=50%`、crossing `[10,1,0,0,0,0,0]`；seed2027：`all_time_max_y=-1.019`、`mean_episode_max_y=-1.354`、`fall_rate=50%`、crossing `[8,3,0,0,0,0,0]`。到 `agent_4500` seed2026，最大 Y `-1.077`、跌倒率上升至 `75%`、crossing `[10,1,0,0,0,0,0]`，因此不把更高步数当作更优，保留 `agent_1000/2250` 作为候选节点，继续以多 seed 稳定性为准。平台率和停稳率始终为 0，尚未接入后段链。
+
+### exit20 单变量课程实验（已停止，保留诊断结果）
+
+在 wp5 `agent_2250` 基线上只修改 curriculum 出生比例为 `(0.6, 0.2, 0.2)`：正式出生 60%、坑洼入口 20%、第二门后过渡 20%；奖励、waypoint、控制和 PPO 均保持不变。该线使用 seed3500、`lr=1e-5`、`epochs=3`，没有早停门或 specialist 终点，最终仍必须从正式出生点评估。
+
+`exit20 agent_1000` 正式 seed2026、8 回合：`all_time_max_y=0.477`、`max_episode_y=-0.026`、`mean_episode_max_y=-1.159`、`fall_rate=12.5%`、`timeout_rate=87.5%`、`waypoint_crossing_counts=[5,2,0,0,0,0,0]`、`waypoint_episode_histogram=[0,5,2,0,1,0,0,0]`；平台率/停稳率均 0。`agent_2250`：`all_time_max_y=0.109`、`max_episode_y=-0.059`、`mean_episode_max_y=-1.212`、`fall_rate=50%`、`timeout_rate=50%`、crossing `[4,3,0,0,0,0,0]`。该课程比例确实把正式前段推进到第三/第四门附近，但尚未越过 `y>=1.0`，不能接后段链；暂保留 `agent_1000` 作为 exit20 候选节点，不以单次 ongoing 最大 Y 作为成功证据。
+
+`exit20 agent_1000` seed2027：`all_time_max_y=0.525`、`mean_episode_max_y=-0.827`、`fall_rate=37.5%`、`timeout_rate=62.5%`、crossing `[5,2,0,0,0,0,0]`；seed2028：`all_time_max_y=-1.018`、`mean_episode_max_y=-1.335`、`fall_rate=12.5%`、`timeout_rate=87.5%`、crossing `[7,1,0,0,0,0,0]`。三个 seed 都没有第三 waypoint crossing、没有正式进入 `y>=1.0`，平台率和停稳率均为 0。该线改善了前两门的一致性，但尚不足以接后段链；停止继续训练，保留 `agent_1000` 仅作前段诊断候选。
+
+### exitgate20 出口课程实验（已停止，当前最佳诊断候选）
+
+在 `exit20 agent_1000` 基线上只把 20% transition curriculum 出生范围从 `y∈[-0.45,-0.25]` 前移到第三 waypoint 出口附近 `y∈[-0.95,-0.75]`，正式出生/坑洼入口比例、wp5 reward、route、控制和 PPO 不变。`agent_1000` seed2026 首次出现第三 waypoint crossing：`all_time_max_y=-0.610`、`fall_rate=55.6%`、crossing `[6,3,1,0,0,0,0]`；随后 `agent_2250` seed2026 为 `all_time_max_y=-0.427`、`fall_rate=50%`、crossing `[5,2,1,1,0,0,0]`。seed2027 的 `agent_2250` 为 `all_time_max_y=-0.521`、`fall_rate=37.5%`、crossing `[6,1,1,1,0,0,0]`。这证明第三 waypoint 已能跨 seed 重复出现，且第四 waypoint 偶发；但完成回合仍未进入 `y>=1.0`，平台率和停稳率均 0，尚不能接入后段链或录制成果。
+
+基于 `exitgate20 agent_2250` 做同环境低学习率延续（`lr=2e-6`、`epochs=2`、seed3601），不改变出生课程、奖励、waypoint 或终止逻辑；仅用于观察已学第三/第四门能否继续向 `y>=1.0` 出口推进。关键节点仍从正式出生点评估，若第三门连续无改善或跌倒率退化即停止。
+
+该延续 `agent_1000` seed2026：`all_time_max_y=-0.294`、`mean_episode_max_y=-1.063`、`fall_rate=33.3%`、`timeout_rate=66.7%`、crossing `[6,4,1,2,0,0,0]`。相较 warm-start，第三 waypoint 保持、第四 waypoint crossing 增至 2 次，但正式完成回合仍未到 `y>=1.0`；平台率和停稳率均 0。该节点是当前前段最强诊断候选，但仍不能接完整链或作为最终成果。
+
+同一 `agent_1000` seed2027：`all_time_max_y=-0.528`、`mean_episode_max_y=-1.126`、`fall_rate=25%`、`timeout_rate=75%`、crossing `[6,1,1,1,0,0,0]`。第三/第四 waypoint 在两个 seed 均出现，且跌倒率下降；但仍未进入 `y>=1.0`，平台率和停稳率均 0。当前最佳正式前段候选锁定为 `exitgate20_cont2e6/agent_1000`，只用于继续出口分析，不得宣称结营成功。
+
+### 完整链交接诊断
+
+### postgate20 出口课程实验（已淘汰）
+
+在 `exitgate20_cont2e6/agent_1000` 基线上只把 20% transition curriculum 出生范围改为坡面入口 `y∈[0.0,0.5]`，正式出生 60%、坑洼入口 20% 保持不变；wp5 reward、route、控制、观测和终止逻辑不变。训练 seed3700、`lr=2e-6`、`epochs=2`，最终仍以正式出生多 seed 评估为准。
+
+`postgate20 agent_1000` seed2026 退化为 `all_time_max_y=0.549`，第三 waypoint crossing 为 0，已淘汰。说明把辅助出生直接放到坡面入口不能迁移正式前段出口能力。
+
+### 往届固定速度迁移诊断
+
+往届复现代码的 finetune 固定前向命令约为 `0.5`，因此对当前最佳 `exitgate20_cont2e6/agent_1000` 做了只修改评估 command speed 的 0.4/0.5/0.6 三档正式 seed2026 诊断（各 4 回合）。0.4：`max_episode_y=-1.250`、`fall_rate=50%`、crossing `[3,0,0,0,0,0,0]`；0.5：`-1.248`、`75%`、`[4,0,0,0,0,0,0]`；0.6：`-1.225`、无跌倒但 4 回合均超时、`[3,0,0,0,0,0,0]`。短评估中没有任何档位进入第三 waypoint，说明固定速度 0.5 不是当前出口瓶颈的单一原因；保留训练时的 0.6，不迁移该往届值。
+
+### 动作尺度迁移诊断
+
+对同一最佳 checkpoint、正式 seed2026、4 回合仅覆盖物理 action scale：保留当前 `0.17` 得 `fall_rate=50%`、crossing `[4,0,0,0,0,0,0]`（ongoing 轨迹可到第三门）；强制往届固定 `0.20` 则 `fall_rate=100%`、完成回合平均最大 Y `-1.619`、crossing `[2,0,0,0,0,0,0]`。因此当前地形的 `0.17→0.20` blend 是必要兼容差异，不能直接照搬往届固定 0.20。
+
+### bridge20 动态桥接实验（已淘汰）
+
+在最佳 `exitgate20_cont2e6/agent_1000` 基线上只把 20% transition curriculum 出生范围设为 `y∈[-0.6,-0.3]`，覆盖第三/第四 waypoint 后的短动态桥接；正式出生 60%、坑洼入口 20%、reward、waypoint、action scale、观测和终止逻辑不变。训练 seed3800、`lr=2e-6`、`epochs=2`，最终仍从正式出生多 seed 评估。
+
+`bridge20 agent_1000` seed2026：`all_time_max_y=-0.942`、`mean_episode_max_y=-1.273`、`fall_rate=50%`、crossing `[4,1,0,0,0,0,0]`，虽有 ongoing 轨迹到 `y=-0.448`，但完成回合第三 waypoint 为 0，已淘汰。说明在第二门到第三门之间直接增加 transition 出生不能迁移出口行为。
+
+### rewardaligned 单变量实验（已淘汰）
+
+代码审计确认当前默认 locomotion 还施加 `penalty_base_height=2.0`、`penalty_stall=0.3`、`penalty_feet_overstay=0.02`、`penalty_action_rate=0.005`，而往届最终 Section011 采用 `base_height_drop=0`、`anti_stall=0`、`action_rate=-0.0015`、`dof_vel=-1e-4`。基于最佳 `exitgate20_cont2e6/agent_1000` 只对齐这些 penalty 权重，transition 出生仍为 exitgate20，seed3900、`lr=2e-6`、`epochs=2`；不改变 waypoint、action scale、观测或终止逻辑。
+
+`rewardaligned agent_1000` 正式 seed2026、4回合：`all_time_max_y=-1.109`、`mean_episode_max_y=-1.334`、`fall_rate=75%`、`timeout_rate=25%`、crossing `[3,2,0,0,0,0,0]`。第三 waypoint 为 0，明显低于当前最佳 `exitgate20_cont2e6/agent_1000` 的第三/第四 waypoint 证据，已淘汰；说明直接照搬往届 penalty 结构会破坏当前项目已学前段稳定性。
+
+### terrain action-scale 终点扫描
+
+在当前最佳 `exitgate20_cont2e6/agent_1000`、正式 seed2026、4回合中只覆盖地形 blend 终点：`terrain_action_scale=0.18` 得 `all_time_max_y=-0.992`、`fall_rate=50%`、crossing `[4,1,0,0,0,0,0]`；`0.19` 得 `-1.247`、`50%`、crossing `[3,0,0,0,0,0,0]`。两者都低于原配置 `0.20` 端点在 ongoing 轨迹中可见的第三/第四门表现，停止扫描，不再扩展动作尺度参数。
+
+### nogate 单变量实验（已停止，未改善出口）
+
+当前项目的 `reference_curriculum_safe` 继承了 `gate_progress_by_stability=True` 与 `gate_motion_by_angular_stability=True`。在最佳 `exitgate20_cont2e6/agent_1000` 基线上只关闭这两项奖励门控，保留跌倒惩罚、action-scale blend、正式出生比例、waypoint 和终止逻辑；训练 seed4000、`lr=2e-6`、`epochs=2`，用于验证角速度门是否压制出口探索。
+
+`nogate agent_1000` seed2026：`all_time_max_y=-0.742`、`fall_rate=50%`、crossing `[4,2,1,0,0,0,0]`；seed2027：`all_time_max_y=-0.523`、`fall_rate=0%`、crossing `[1,0,1,1,0,0,0]`，4 回合均超时。第三 waypoint 在两个 seed 均出现，第四 waypoint 在 seed2027 出现一次，但没有任何 seed 进入 `y>=1.0`，平台率和停稳率均 0；相比最佳基线没有稳定性或出口突破优势，停止继续训练并保留结果作为诊断。
+
+### 观测/动作滤波审计
+
+逐项核对后，当前最佳环境已与往届一致使用 `normalization.lin_vel=2.0`、`ang_vel=0.25`、`dof_vel=0.05`、body-frame locomotion observations，且实际 `action_filter_alpha=1.0`；这些不是当前“站立但不出坑”的未对齐原因。当前必要差异主要是 terrain action-scale blend 和项目安全惩罚，均已有单变量退化证据，不再继续扫描。
+
+使用当前 dense-entry 节点1000作为 base，串接既有 post-third、ramp400、ramp600、strict-stand checkpoint，仅用于诊断正式出生交接，不作为最终成果。seed2026、8回合结果：`all_time_max_y=-1.019`、`fall_rate=37.5%`、waypoint counts `[9,2,0,0,0,0,0]`，而 `stage_entry_counts=[16,0,0,0,0]`（切换边界为 `y=-0.6,2.25,4.0,6.0`）。也就是说正式出生候选尚未到达 `y=-0.6`，后段策略没有被调用；当前真正瓶颈仍是前段第二门出口，不能用后段链或局部 reset 掩盖。
+
+使用当前最佳正式前段 `exitgate20_cont2e6/agent_1000` 串接既有 post-third、ramp400、ramp600、ramp-top、strict-stand，仅作真实出生交接诊断。seed2026、4回合结果：`all_time_max_y=-1.250`、`fall_rate=50%`、`waypoint_crossing_counts=[4,0,0,0,0,0,0]`、`stage_entry_counts=[8,0,0,0,0,0]`，切换边界为 `[-0.6,2.25,4.0,6.0,6.9]`。正式出生没有一次到达 `y=-0.6`，因此任何后段策略都没有被调用；该链不能作为成功证据，也不能用于最终视频。
+
+### postsecond15 curriculum continuation（已停止，未改善第二门）
+
+为验证少量第二门后状态是否能改善同一主策略的出口平衡，基于 wp5 的 `agent_2250` 启动 `vbot_locomotion_section011_reference_current_route_safe_dense_entry_postsecond15`。该线采用正式出生 70%、坑洼入口 15%、第二门后局部状态 15% 的混合出生；局部状态只用于训练辅助，没有提前稳定终止，也不作为最终评估出生点。训练参数为 `learning_rate=2e-6`、`learning_epochs=2`、`checkpoint_interval=250`，GPU0，seed=2950。
+
+截至当前训练已保存到相对节点 1750。对 `agent_1000` 从正式出生、seed2026、8 个并行环境评估（完成 8 回合）结果为：`all_time_max_y=0.038`、`mean_episode_max_y=-1.178`、`fall_rate=12.5%`、`waypoint_crossing_counts=[8,0,0,0,0,0,0]`、`ever_on_platform_rate=0`、`stable_success_rate=0`。其中 7 回合超时、1 回合跌倒；最大 Y 仅为单次异常前冲，不能作为成功证据。该节点尚未改善第二门跨越，暂不接入后段链，也不录制或提交最终成果。短窗口（未完成回合）的评估已明确视为无效，不纳入 checkpoint 选择。
+
+### 修正版往届对齐四线（seed 3100–3103）
+
+在四张 T4 上从零并行训练四条独立单变量线至相对节点 2250：完全对齐线（seed3100，`lr=1e-4, epochs=5`）、仅目标方向速度奖励由 2.0 调至 2.5 的奖励线、仅替换为当前 Section1 waypoint 序列的 command 线，以及仅把 PPO 改为 `lr=3e-4, epochs=6` 的超参数线。四线均使用 2048 environments、checkpoint 间隔 250，未使用往届 checkpoint。
+
+统一从正式出生、seed2026、16 environments 评估：奖励线 `all_time_max_y=-1.645`、超参数线 `-1.778`、waypoint 线 `-1.627`，三者均 `fall_rate=100%`、waypoint 全 0、平台率和停稳率为 0，已淘汰。完全对齐线在 2500 control steps 内未完成回合，`all_time_max_y=-1.708`、ongoing mean max Y `-2.174`、无跌倒但 waypoint 全 0；该结果仅显示站立/低速移动，不能证明成功。按“稳定优先，再看持续前进”的协议，当前只保留完全对齐线从 `agent_2250` 继续训练，其余三条不续训。
+
+### scale18 动作幅度诊断（已淘汰）
+
+在 proven `exitgate20_cont2e6/agent_2250` 上只将 rough-terrain action-scale 终点从 `0.20` 改为 `0.18`，其余 route、观测、奖励、课程和 PPO 不变。seed=4400，JAX，`lr=2e-6`，`epochs=2`。
+
+正式出生、seed2026、4 回合的 `agent_1000`：`all_time_max_y=-1.082`、`mean_episode_max_y=-1.241`、crossing `[4,2,0,0,0,0,0]`、`fall_rate=25%`、`timeout_rate=75%`、`ever_on_platform_rate=0`、`stable_success_rate=0`。动作幅度终点不是当前出口的单一瓶颈，已淘汰。
+
+### 历史 seed343/17.5k 当前代码复测
+
+T4 仍保留本项目早期长训 checkpoint：
+`runs/vbot_locomotion_section011_full_route_angular_safe_forward06/26-08-11_21-37-49-387712_PPO/checkpoints/agent_17500.pickle`。
+文档历史记录曾报告该节点在旧代码版本中出现 `y≈1.6` 的单次轨迹。用当前代码、当前正式出生点评估 seed2026、4 回合复测得到：`all_time_max_y=-1.309`、`mean_episode_max_y=-1.417`、crossing `[3,0,0,0,0,0,0]`、`fall_rate=100%`、`ever_on_platform_rate=0`、`stable_success_rate=0`。因此旧结果不能作为当前成果证据，也不能直接接完整链；该 checkpoint 仅保留作版本差异诊断。
+
+本轮验证后，所有新增临时环境别名已从最终代码注册表移除，实验结果保留在本文档中。
+
+### seed343 旧路线低学习率 continuation（已淘汰）
+
+为验证历史完整路线 checkpoint 是否仍有可恢复的前进能力，在 T4 独立快照目录中使用本项目自己的
+`seed343/17.5k` checkpoint（`26-08-11_21-37-49-311965_PPO/agent_17500.pickle`）续训。训练代码取自当时的
+`cfcafec` 快照，JAX、GPU1、seed=4500、`learning_rate=2e-6`、`learning_epochs=2`，没有引入 handoff specialist、早停门或局部最终成果。
+
+正式出生、seed2026、8 回合评估：
+
+| continuation checkpoint | all_time_max_y | mean_episode_max_y | waypoint crossings | fall_rate | timeout_rate |
+|---:|---:|---:|---|---:|---:|
+| agent_2500 | 0.702 | -1.088 | `[11,3,0,0,0,0,0]` | 37.5% | 62.5% |
+| agent_5000 | 0.280 | -0.679 | `[11,4,0,0,0,0,0]` | 55.6% | 44.4% |
+| agent_10000 | 0.555 | -0.589 | `[15,3,0,0,0,0,0]` | 100% | 0% |
+
+三个关键节点都没有第三 waypoint crossing 或正式 `y>=1.0`，平台率和停稳率均为 0，且后续节点跌倒率恶化到 100%。按“连续两个节点无出口改善即停止”规则，该 continuation 已淘汰；checkpoint 仅作为本项目训练诊断，不进入最终交付。
+
+### frontbridge_lr1e5 历史强 checkpoint 与链评估审计
+
+T4 保留一条更强的本项目完整路线 continuation：
+`vbot_locomotion_section011_full_route_angular_safe_forward06/frontbridge_lr1e5_cont/agent_10000.pickle`。
+历史标准单策略 evaluator 在正式 seed2026 曾记录该节点 `all_time_max_y=2.108`、`mean_episode_max_y=-0.498`、第三 waypoint crossing，说明它比 dense-entry/exitgate20 更接近出口，但平台率和停稳率仍为 0。
+
+本轮复核发现 chain evaluator 的单策略结果与标准 evaluator 不一致：同一 checkpoint、同一正式 seed2026，标准 evaluator 得到 `all_time_max_y=1.013`、而 chain evaluator 只有 `0.502`，两者均跌倒率 100%。进一步的重复策略链（同一 checkpoint 加载两次、切换边界设为不可达）仍得到 `0.502`，说明 chain evaluator 的模型/动作执行路径仍未与标准 evaluator 等价；该结果不能作为正式完整链成功证据。已对 chain evaluator 做懒加载和单策略动作路径修正，但在回归前不接入后段、不录视频、不提交成果。
+
+标准 evaluator 多 seed 复核（同一 `frontbridge_lr1e5_cont/agent_10000`，正式出生、4 回合）：
+
+| seed | all_time_max_y | mean_episode_max_y | waypoint crossings | fall_rate | ever_on_platform_rate | stable_success_rate |
+|---:|---:|---:|---|---:|---:|---:|
+| 2026 | 1.013 | -0.266 | `[15,7,0,0,0,0,0]` | 100% | 0 | 0 |
+| 2027 | -0.738 | -1.119 | `[4,0,0,0,0,0,0]` | 0% | 0 | 0 |
+| 2028 | -0.480 | -0.756 | `[4,1,0,0,0,0,0]` | 0% | 0 | 0 |
+| 2029 | 1.208 | -0.046 | `[6,3,1,0,0,0,0]` | 100% | 0 | 0 |
+
+该候选虽在 seed2026/2029 偶发到达 `y>=1.0`，但多 seed 不能重复，且所有 seed 平台率、停稳率均为 0；不能接完整链或录制最终视频。
+
+### frontbridge_lr1e5 agent_17500 正式复核（未通过，已停止）
+
+检查该训练目录后发现最新节点为 `agent_17500.pickle`（同一条本项目 continuation，非往届 checkpoint）。使用当前代码、正式出生点、4 个并行环境、每 seed 4 回合分别评估 seed 2026--2029。为避免评估路径误差，先用 seed2026 对标准 `evaluate_section011.py` 与单策略 `evaluate_section011_policy_chain.py` 做等价性回归；两者的最大 Y、waypoint、跌倒率、平台率和停稳率完全一致，单策略 chain evaluator 因此可用于后续链诊断。
+
+| seed | all_time_max_y | mean_episode_max_y | waypoint crossings | fall_rate | ever_on_platform_rate | stable_success_rate |
+|---:|---:|---:|---|---:|---:|---:|
+| 2026 | -0.690 | -1.070 | `[7,0,0,0,0,0,0]` | 100% | 0 | 0 |
+| 2027 | 8.210 | 1.097 | `[5,4,2,1,1,1,1]` | 100% | 0 | 0 |
+| 2028 | -0.370 | 0.000 | `[4,2,0,0,0,0,0]` | 0% | 0 | 0 |
+| 2029 | 1.511 | 0.067 | `[6,3,1,0,0,0,0]` | 100% | 0 | 0 |
+
+seed2027 的 `y=8.21` 是跌倒后的极端前冲，不能视为进入平台；四个 seed 均没有任何平台事件或连续停稳事件。该节点表现为严重种子敏感性和出口跌倒，按“稳定成功优先、连续两个节点无可靠改善即停止”的规则淘汰，不接入 `post-third→ramp400→ramp600→ramp-top→strict platform stand`，不录制视频，不推送 GitHub，也不更新最终飞书交付文档。
+
+本轮结束时 T4 四张 GPU 均空闲，未发现本项目训练或评估进程；`motrixarena` 自动化仍保持暂停。
+
+### wp5 no-fall-penalty continuation（已淘汰）
+
+为验证往届终止惩罚语义是否造成出口跌倒，基于本项目 `frontbridge_lr1e5_cont/agent_2500` warm-start，仅将当前配置额外的 `terminal_fall_penalty` 从 `10` 改为 `0`；waypoint、动作尺度 blend、观测、课程和 PPO 其余设置不变。训练环境为 `vbot_locomotion_section011_reference_current_route_safe_dense_entry_wp5_no_fallpenalty`，seed=4700、GPU0、学习率 `2e-6`、epochs=2。
+
+正式出生、seed2026、4 回合的 `agent_500` 结果为：`all_time_max_y=-0.913`、`mean_episode_max_y=-1.266`、waypoint crossings `[5,3,0,0,0,0,0]`、`fall_rate=100%`、`ever_on_platform_rate=0`、`stable_success_rate=0`。该单变量修改没有改善第三 waypoint 或出口，且跌倒率仍为 100%，训练在 750 节点停止，不进入完整链。
+
+### wp5 command speed 0.4 continuation（已淘汰）
+
+在同一 `frontbridge_lr1e5_cont/agent_2500` 本项目 checkpoint 上，仅把训练期间的 `navigation_body_forward_speed` 从 `0.6` 调为 `0.4`，保留 dense-entry/wp5 waypoint、奖励、动作尺度、观测和 PPO 设置。正式出生、seed2026、4 回合的 `agent_500`：`all_time_max_y=-0.568`、`mean_episode_max_y=-1.349`、waypoint crossings `[4,4,2,1,0,0,0]`、`fall_rate=100%`、`ever_on_platform_rate=0`、`stable_success_rate=0`。较低命令速度增加了第三/第四 waypoint 计数，但没有减少出口跌倒或进入平台；按稳定成功优先级停止，不接完整链。
+
+### wp5 mid-waypoints command geometry continuation（已淘汰）
+
+代码审查发现 dense-entry route 在 `y=-0.4` 后直接跳到 `(0,4.5)`，可能造成出坑后的横向/纵向命令不连续。基于本项目 `frontbridge_lr1e5_cont/agent_2500`，仅恢复 `(0.6,1.6)` 与 `(0.6,2.7)` 两个中间目标，其他 reward、动作尺度、观测、课程和 PPO 保持不变。正式出生、seed2026、4 回合的 `agent_500`：`all_time_max_y=-0.941`、`mean_episode_max_y=-1.039`、waypoint crossings `[4,5,0,0,0,0,0,0,0]`、`fall_rate=100%`、`ever_on_platform_rate=0`、`stable_success_rate=0`。中间目标没有改善出坑后的第三 waypoint，训练停止，不接完整链。
+
+该线随后从 `agent_500` warm-start 继续到 `agent_750`（seed=4901）。正式 seed2026、4 回合复测为：`all_time_max_y=-1.044`、`mean_episode_max_y=0.000`、waypoint crossings `[3,4,0,0,0,0,0,0,0]`、`fall_rate=0%`、`ever_on_platform_rate=0`、`stable_success_rate=0`。虽然跌倒率暂时下降，但前进能力退化、第三 waypoint 仍为 0，不能作为出口解，继续训练已停止。
+
+### wp5 component-wise command continuation（已淘汰）
+
+为验证固定 body-forward command 是否是出口瓶颈，基于本项目 `frontbridge_lr1e5_cont/agent_2500` 仅将 `navigation_body_forward_speed` 设为 `None`，恢复按 waypoint 位置误差分别生成平面速度命令；其他 reward、waypoint、动作尺度、观测、课程和 PPO 不变。正式出生、seed2026、4 回合的 `agent_500`：`all_time_max_y=-0.440`、`mean_episode_max_y=-1.128`、waypoint crossings `[3,4,3,1,0,0,0]`、`fall_rate=100%`、`ever_on_platform_rate=0`、`stable_success_rate=0`。第三/第四 waypoint 计数有所增加，但仍全部跌倒、没有平台事件，训练停止，不接完整链。
+
+### wp5 contact recovery termination continuation（已淘汰）
+
+代码审计发现当前环境把任意 `base_contact` 直接作为跌倒终止；部分原始评估样本在终止时仍有较好直立度和较低角速度，可能是坑沿擦底。新增独立配置，仅在接触同时满足姿态/角速度/底盘离地证据时终止，阈值为 upright cosine `<0.30`、角速度 `>2.5` 或 clearance `<0.18`；其余 reward、waypoint、动作尺度、观测、课程和 PPO 不变。基于本项目 `frontbridge_lr1e5_cont/agent_2500` 的 `agent_500`（seed2026、4 回合）达到 `all_time_max_y=-0.070`、`mean_episode_max_y=-0.475`、waypoint `[4,4,3,3,0,0,0]`，首次明显覆盖第三/第四 waypoint，但仍 `fall_rate=100%`、平台率/停稳率为 0。
+
+从 `agent_500` 续训到 `agent_750` 后反而退化为 `all_time_max_y=-0.739`、`mean_episode_max_y=-1.379`、waypoint `[4,4,2,0,0,0,0]`、`fall_rate=100%`。该修正改善了短期前进覆盖但没有产生稳定出口，已停止，不接完整链。
+
+### wp5 contact recovery loose continuation（已淘汰）
+
+在 contact-recovery 配置基础上进一步放宽接触终止阈值（upright cosine `<-0.10`、角速度 `>4.0` 或 clearance `<0.10`），仅作为姿态终止敏感性诊断；其他设置不变，从本项目 contact-recovery `agent_500` warm-start。正式出生、seed2026、4 回合 `agent_500`：`all_time_max_y=-0.230`、`mean_episode_max_y=-1.373`、waypoint crossings `[4,4,3,1,0,0,0]`、`fall_rate=100%`、`ever_on_platform_rate=0`、`stable_success_rate=0`。终止样本平均直立度 `-0.430`、角速度 `4.03`，已属真实翻倒而非擦底；放宽阈值没有改善平台进入，训练停止，不接完整链。
+
+### runner-up body-frame waypoint command continuation（已淘汰）
+
+逐行对照往届 `vbot_section011_base_np.py` 后，当前命令实现缺少往届 waypoint_nav 的 body-frame 比例命令和速度上限（`kp=0.8`、`vx[-0.6,0.8]`、`vy[-0.4,0.4]`、`yaw kp=1.0`）。新增配置仅采用该命令语义，基于本项目 contact-recovery `fromfb2500/agent_500` warm-start、重置 optimizer、lr `2e-6`、epochs=2。训练首个 `agent_250` 正式 seed2026、4 回合：`all_time_max_y=-0.821`、`mean_episode_max_y=-1.946`、waypoint `[0,1,1,0,0,0,0]`、`fall_rate=100%`、平台率/停稳率均 0。该命令适配未改善当前路线，训练停止；同时修复了初版适配遗漏的 `root_quat` 参数并通过编译启动自检。
+
+为排除 warm-start 观测/命令不兼容，随后在该往届命令语义 + contact-recovery 配置上从零训练，采用往届 PPO 强度（`lr=1e-4`、epochs=5、2048 env）。`agent_250` 正式 seed2026、4 回合：`all_time_max_y=-1.265`、`mean_episode_max_y=0.000`、waypoint 全 0、`fall_rate=0%`、平台率/停稳率均 0。该从零线未学会第一 waypoint，停止，不接完整链。
+
+本轮代码审计通过：所有新增环境别名均同时注册 envcfg、RL cfg 和 NP backend；T4 上 `py_compile`、环境实例化和 checkpoint 目录检查均通过，当前四张 GPU 空闲、无训练/评估进程。由于往届命令从零线仍未过第一 waypoint，当前项目尚未形成可交付候选，继续盲目训练没有证据支持。
+
+### contact-recovery 2-D gate continuation（已淘汰）
+
+在 route target 与 monotonic Y gate 语义不一致的基础上，进一步启用现有二维距离阈值 `route_waypoint_reach_threshold=0.35`，只有真正接近当前二维目标才推进 waypoint；其他 termination、reward、动作尺度、观测、课程和 PPO 不变。基于本项目 contact-recovery `fromfb2500/agent_500`，正式 seed2026、4 回合 `agent_500`：`all_time_max_y=-0.705`、`mean_episode_max_y=-1.274`、waypoint crossings `[3,3,1,1,0,0,0]`、`fall_rate=100%`、`ever_on_platform_rate=0`、`stable_success_rate=0`。二维 gate 没有改善出口，训练停止，不接完整链。
+
+对目前最强的本项目 `contact_recovery_fromfb2500/agent_500` 做正式出生、多 seed 复核（seed 2026--2029，每 seed 4 回合）仍未通过：2026 `all_time_max_y=-0.798`、crossings `[3,4,2,0,0,0,0]`、fall `0%`；2027 `-0.491`、`[4,3,2,2,0,0,0]`、fall `100%`；2028 `0.513`、`[4,5,3,3,0,0,0]`、fall `100%`；2029 `0.294`、`[3,4,2,1,0,0,0]`、fall `0%`。四个 seed 的 `ever_on_platform_rate=0`、`stable_success_rate=0`，且未进入后段坡面，继续优化停止，不接完整链、不录最终视频。
+
+### contact-recovery aligned gate continuation（已淘汰）
+
+审查发现 dense-entry route targets 与 monotonic `waypoint_y` gates 不一致：例如目标 `y=-1.1` 却在 `y=-1.5` 提前切换。新增配置仅将 gates 对齐到实际目标 y：`(-1.1,-0.9,-0.7,-0.4,4.5,6.5,7.8)`，其他 termination、reward、动作尺度、观测、课程和 PPO 不变。基于本项目 contact-recovery `fromfb2500/agent_500`，正式 seed2026、4 回合 `agent_500`：`all_time_max_y=-0.671`、`mean_episode_max_y=-0.830`、waypoint crossings `[6,4,1,0,0,0,0]`、`fall_rate=100%`、`ever_on_platform_rate=0`、`stable_success_rate=0`。gate 对齐没有改善出口，训练停止，不接完整链。
+
+### contact-recovery route-target observation continuation（已淘汰）
+
+代码审查发现 route command 已按 active waypoint 生成，但默认观测仍使用最终目标误差。新增配置仅打开 `observe_route_target=True`，使观测中的位置/朝向/距离误差与当前 waypoint 命令一致；其余 termination、reward、waypoint、动作尺度、课程和 PPO 保持不变。基于本项目 contact-recovery `fromfb2500/agent_500`，正式 seed2026、4 回合 `agent_500`：`all_time_max_y=-0.437`、`mean_episode_max_y=-1.174`、waypoint crossings `[4,5,1,1,0,0,0]`、`fall_rate=100%`、`ever_on_platform_rate=0`、`stable_success_rate=0`。观测对齐没有改善出口，训练停止，不接完整链。
+
+### contact-recovery low-learning-rate stabilization（已淘汰）
+
+基于本项目 contact-recovery `fromfb2500/agent_500`，仅将 continuation PPO 调为 `learning_rate=1e-6`、`learning_epochs=1`，保持 contact-recovery 终止、reward、waypoint、动作尺度和观测不变。正式 seed2026、4 回合 `agent_500`：`all_time_max_y=-0.930`、`mean_episode_max_y=0.000`、waypoint crossings `[3,2,0,0,0,0,0]`、`fall_rate=0%`、`ever_on_platform_rate=0`、`stable_success_rate=0`。虽然避免了翻倒，但前进能力退化，已停止，不接完整链。
+
+### contact-recovery from frontbridge agent_2500 reset-optimizer continuation（已淘汰）
+
+为保留本项目已有 locomotion，同时避免旧 optimizer/state 继续推坏策略，基于本项目 `frontbridge_lr1e5_cont/agent_2500` 在 contact-recovery 环境中 warm-start，仅重置 PPO optimizer、使用 `learning_rate=1e-5`、`epochs=1`；其他环境和终止逻辑不变。正式 seed2026、4 回合 `agent_500`：`all_time_max_y=0.816`、`mean_episode_max_y=-0.027`、waypoint crossings `[5,5,4,3,0,0,0]`、`fall_rate=100%`、`ever_on_platform_rate=0`、`stable_success_rate=0`。这是目前第三/第四 waypoint 覆盖最强的 continuation，但仍全部翻倒，未到平台，训练停止，不接完整链。
+
+### contact-recovery scratch training（已淘汰）
+
+为避免 warm-start 将原有错误接触终止策略带入新环境，在 contact-recovery 配置上从零训练（seed=5800、2048 env、lr `2e-6`、epochs=2）。正式 seed2026、4 回合的 `agent_1000`：`all_time_max_y=-1.206`、`mean_episode_max_y=0.000`、waypoint crossings 全 0、`fall_rate=0%`、`ever_on_platform_rate=0`、`stable_success_rate=0`。从零线尚未学会第一 waypoint，已停止，不接完整链。
+
+### contact-recovery frozen-observation continuation（已淘汰）
+
+平台几何审查确认场景碰撞平台顶面约 `z=1.29`，当前 `platform_base_z_min=1.55` 是按机器人底盘高度定义的合理阈值，未发现平台统计坐标错位。随后对 contact-recovery `agent_500` 做 warm-start，仅冻结已有 state preprocessor 并重置 PPO optimizer，其他设置不变。正式 seed2026、4 回合 `agent_500`：`all_time_max_y=-0.400`、`mean_episode_max_y=-1.190`、waypoint crossings `[4,5,3,1,0,0,0]`、`fall_rate=100%`、`ever_on_platform_rate=0`、`stable_success_rate=0`。冻结归一化没有改善出口，训练停止，不接完整链。
+
+### contact-recovery no-gate continuation（已淘汰）
+
+在 contact-recovery 配置中仅关闭 `gate_progress_by_stability` 与 `gate_motion_by_angular_stability`，保留真实翻倒终止、接触恢复阈值、reward、waypoint、动作尺度、观测、课程和 PPO。正式 seed2026、4 回合 `agent_500`：`all_time_max_y=-0.537`、`mean_episode_max_y=-1.181`、waypoint crossings `[6,5,2,1,0,0,0]`、`fall_rate=100%`、`ever_on_platform_rate=0`、`stable_success_rate=0`。第三/第四 waypoint 有少量覆盖，但出口仍全部翻倒，训练停止，不接完整链。
+
+### contact-recovery no-fall-cost continuation（已淘汰）
+
+在 contact-recovery 配置中仅将可恢复接触的 `penalty_fall` 与 `terminal_fall_penalty` 都设为 `0`，保留真实翻倒终止和其他全部设置。基于本项目 contact-recovery `agent_500`，正式 seed2026、4 回合 `agent_500`：`all_time_max_y=-0.785`、`mean_episode_max_y=-1.370`、waypoint crossings `[4,4,1,0,0,0,0]`、`fall_rate=100%`、`ever_on_platform_rate=0`、`stable_success_rate=0`。取消接触惩罚后前进能力退化，训练停止，不接完整链。
+
+### contact-recovery optimizer reset continuation（已淘汰）
+
+为排除 warm-start 旧 PPO optimizer/state 导致策略退化，基于本项目 contact-recovery `agent_500` 续训时仅使用 `--reset-optimizers`，环境与 reward/termination/waypoint/action/observation 全部不变。正式出生、seed2026、4 回合的 `agent_500`：`all_time_max_y=-0.328`、`mean_episode_max_y=-1.118`、waypoint crossings `[5,4,1,1,0,0,0]`、`fall_rate=100%`、`ever_on_platform_rate=0`、`stable_success_rate=0`。重置优化器没有改善出口，训练停止，不接完整链。
+
+### wp5 damping 8 continuation（已淘汰）
+
+为验证出口姿态失稳是否可由 PD 阻尼改善，基于本项目 `frontbridge_lr1e5_cont/agent_2500` 仅将控制阻尼从 `6` 调为 `8`，保持 reward、waypoint、动作尺度、观测、课程和 PPO 不变。正式出生、seed2026、4 回合的 `agent_500`：`all_time_max_y=-0.366`、`mean_episode_max_y=-0.796`、waypoint crossings `[4,5,4,1,0,0,0]`、`fall_rate=100%`、`ever_on_platform_rate=0`、`stable_success_rate=0`。第三/第四 waypoint 计数增加，但跌倒率没有改善，训练停止，不接完整链。
+
+### frontbridge safe continuation（已淘汰）
+
+以历史 `frontbridge_lr1e5/agent_2500`（正式 seed2026 跌倒率约 36.7%、最大 Y 1.54）为 warm-start，保持完整路线环境、观测、奖励和课程不变，仅将 PPO 学习率降至 `1e-6`、epochs 降至 `1`，seed=4600，作为保守姿态保持验证。
+
+正式出生、seed2026、4 回合：
+
+| checkpoint | all_time_max_y | mean_episode_max_y | waypoint crossings | fall_rate | timeout_rate |
+|---:|---:|---:|---|---:|---:|
+| agent_1000 | 0.580 | -0.313 | `[6,3,0,0,0,0,0]` | 60% | 40% |
+| agent_2000 | 0.133 | -0.582 | `[7,2,0,0,0,0,0]` | 60% | 40% |
+| agent_4000 | -0.175 | -0.689 | `[7,3,0,0,0,0,0]` | 100% | 0% |
+
+保守 continuation 没有保留出口能力，连续节点均无第三 waypoint，且后期跌倒率升至 100%，已停止。
+
+旧版本复现的补充结论：历史 `seed343/17.5k` 实际对应并行训练目录
+`26-08-11_21-37-49-311965_PPO`，而不是同一时间创建的其它三个目录。将本地 Git 提交 `cfcafec` 归档到 T4 独立目录，并复用已校验的机器人资产后，当前正式评估 seed2026、16 环境、16 回合得到 `all_time_max_y=-0.222`、`mean_episode_max_y=-0.907`、crossing `[21,2,0,0,0,0,0]`、`fall_rate=33.3%`、平台率和停稳率均为 0。历史记录中 seed2027–2030 的 `y≈1.08–1.13` 属于不同评估种子，不能替代正式多 seed 成功证据；剩余旧版本评估已停止以避免 T4 资源占用。该旧 checkpoint 和旧代码仅作诊断参考，不进入最终成果。
+### 2026-08-13 往届对齐保底线独立长训（reference_aligned_long）
+
+为执行“双轨并行”中的往届复现保底线，在 T4 GPU0 独立启动当前项目代码的 `vbot_locomotion_section011_reference_aligned`，未使用往届 checkpoint：
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python scripts/train.py \
+  --env=vbot_locomotion_section011_reference_aligned \
+  --num-envs=2048 --learning-rate=1e-4 --learning-epochs=5 \
+  --checkpoint-interval=250 --max-env-steps=10240000 \
+  --seed=6600 --run-tag=reference_aligned_long
+```
+
+该线产生 `agent_250` 至 `agent_5000` 后退出，日志未出现异常堆栈。使用当前项目 evaluator、正式出生点、GPU2、seed=2026、4 回合、`max-control-steps=1800` 评估 `agent_2500`，结果为：`all_time_max_y=-1.722`、`mean_episode_max_y=0.0`（无完成回合）、waypoint crossing 全 0、`fall_rate=0`、`ever_on_platform_rate=0`、`stable_success_rate=0`、`timeout_rate=0`。同一线的 `agent_5000` 在相同协议下达到 `max_episode_y=-1.253`、`mean_episode_max_y=-1.629`，waypoint crossing 仍全 0，4/4 回合跌倒（`fall_rate=1.0`），平台率和停稳率仍为 0。该线随训练退化，不能接入后段链，也不能作为最终候选，已正式淘汰；往届 checkpoint/视频仍仅作诊断参考。完整 JSON 分别保存在 T4 `/tmp/eval_ref2500.out` 和 `/tmp/eval_ref5000.out`。
+### wp5_authoritative_cont agent_4750 正式复核（未通过）
+
+对当前项目主线最新 checkpoint `wp5_authoritative_cont/agent_4750.pickle` 做正式出生、多 seed（2026–2029）评估，每 seed 4 回合、`max-control-steps=1800`：
+
+| seed | all_time_max_y | mean_episode_max_y | waypoint crossings | fall_rate | ever_on_platform_rate | stable_success_rate |
+|---:|---:|---:|---|---:|---:|---:|
+| 2026 | -1.195 | -1.550 | `[3,1,0,0,0,0,0]` | 100% | 0 | 0 |
+| 2027 | -1.074 | 0.000 | `[3,1,0,0,0,0,0]` | 0% | 0 | 0 |
+| 2028 | -1.109 | 0.000 | `[3,1,0,0,0,0,0]` | 0% | 0 | 0 |
+| 2029 | -1.063 | -1.578 | `[3,2,0,0,0,0,0]` | 100% | 0 | 0 |
+
+四个正式 seed 均没有第三 waypoint、没有 `y>=1.0` 或平台事件；主线目前在首段/第二 waypoint 后停止，不能接完整链或作为最终候选。完整评估输出保存在 T4 `/tmp/wp5_4750_2026.out` 至 `/tmp/wp5_4750_2029.out`。
+
+### 当前权威 wp5 的往届 body-frame 命令迁移（已淘汰）
+
+基于当前项目自己的 `wp5_authoritative_cont/agent_1000` warm-start，仅将命令生成改为往届 waypoint-nav 的 body-frame 比例误差（`kp=0.8`、`vx∈[-0.6,0.8]`、`vy∈[-0.4,0.4]`、yaw 限幅 0.8）；奖励、观测、终止、动作尺度和 PPO 其余保持不变。seed=6901、`lr=1e-5`、`epochs=3`，checkpoint `agent_250`。
+
+正式出生 seed2026、2 回合评估：`all_time_max_y=-1.551`、`mean_episode_max_y=-2.031`、waypoint 全 0、跌倒率 100%、平台率 0、停稳率 0。相比 warm-start 主线没有改善，反而更早退化，已停止，不接完整链；JSON 保存在 T4 `/tmp/wp5_runnerupcmd_eval250.out`。
+
+### 当前 wp5 关闭姿态门控的 continuation（已淘汰）
+
+基于当前项目 `wp5_authoritative_cont/agent_1000`，仅关闭 `gate_progress_by_stability` 与 `gate_motion_by_angular_stability`，保持命令、奖励权重、观测、终止和动作尺度不变。先以 `lr=1e-5, epochs=3` warm-start 到 `agent_250`，再以 `lr=2e-6, epochs=2` 续训到 `agent_750`。
+
+正式出生 seed2026、2 回合：`agent_250` 出现 `all_time_max_waypoints=2`、ongoing 最大 Y `-1.168`、waypoint crossings `[1,1,0,0,0,0,0]`，无跌倒但未完成回合，平台率/停稳率均 0；`agent_750` 完成 1 回合后跌倒，`all_time_max_y=-1.065`、`mean_episode_max_y=-1.065`、crossings `[2,1,0,0,0,0,0]`、`fall_rate=100%`，仍未进入 `y>=1.0`。两个关键节点均无第三 waypoint/出口改善，按规则停止，不接完整链；JSON 保存在 T4 `/tmp/wp5_nogate_eval250.out` 与 `/tmp/wp5_nogate_eval750.out`。
+
+补充正式多 seed 复核 `agent_250`（2026–2029，每 seed 2 回合）：seed2026 `all_time_max_y=-1.152`、crossings `[2,1,0,0,0,0,0]`、跌倒率 100%；seed2027 `-1.407`、`[2,0,0,0,0,0,0]`、跌倒率 0%；seed2028 `-1.368`、`[2,0,0,0,0,0,0]`、跌倒率 0%；seed2029 `-1.412`、`[2,0,0,0,0,0,0]`、跌倒率 0%。四个正式 seed 的平台率和停稳率均为 0，第三 waypoint 均为 0，故该线正式淘汰；JSON 保存在 T4 `/tmp/wp5_nogate250_2026.out` 至 `/tmp/wp5_nogate250_2029.out`。
+
+### 当前 wp5 奖励惩罚对齐测试（已淘汰）
+
+基于当前项目 `wp5_authoritative_cont/agent_1000`，仅将继承自 rough-corridor 的额外惩罚对齐到往届值：`penalty_base_height=0`、`penalty_stall=0`、`penalty_action_rate=0.0015`、`penalty_joint_velocity=1e-4`、`penalty_feet_overstay=0`；其余命令、奖励、观测、终止和动作尺度不变。使用 `lr=2e-6`、`epochs=2` warm-start 至 `agent_250`。
+
+正式出生 seed2026、2 回合：`all_time_max_y=-0.943`、`mean_episode_max_y=-0.943`、`all_time_max_waypoints=2`、crossings `[1,1,0,0,0,0,0]`、跌倒率 100%、平台率/停稳率均 0。没有第三 waypoint 或出口改善，已停止，不接完整链；JSON 保存在 T4 `/tmp/wp5_rewardaligned_eval250.out`。
+
+### 历史本项目 frontbridge_safe_cont1e6_ep1 agent_4000 复核（未通过）
+
+为避免只围绕最新 wp5 目录判断，补查已有本项目训练 `vbot_locomotion_section011_full_route_angular_safe_forward06/frontbridge_safe_cont1e6_ep1/agent_4000`。当前代码、正式出生 seed2026、2 回合、`max-control-steps=1800` 评估结果：`all_time_max_y=-0.650`、`all_time_max_waypoints=1`、crossings `[2,0,0,0,0,0,0]`、跌倒率 0（两回合均未结束）、平台率/停稳率均 0。该 checkpoint 仅保持低速前段，未进入第三 waypoint 或 `y>=1.0`，不接完整链；JSON 保存在 T4 `/tmp/frontbridge4000_eval.out`。
+
+### 初始航向最小兼容测试（已淘汰）
+
+代码审查发现当前 route 配置在 reset 时默认把机器人初始航向对准最终平台，而往届 `waypoint_nav` 从首个 waypoint 建立初始航向。新增 `initial_heading_uses_route_target=True` 作为唯一变量，奖励、终止、观测、动作尺度和 PPO 均不变；使用当前项目 `dense_entry_wp5` 结构、seed=6800、`lr=1e-5`、`epochs=3`，GPU0 训练至 `agent_1000`。
+
+正式出生 seed2026、2 回合评估：`agent_250` 的 `all_time_max_y=-1.548`、`max_control_steps=1200` 内无完成回合、waypoint 全 0、`fall_rate=0`、平台率/停稳率均 0；`agent_1000` 为 `all_time_max_y=-1.550`、同样无 waypoint、无完成回合、平台率/停稳率均 0。初始航向对齐没有改善正式前段，已停止，不再续训；完整 JSON 保存在 T4 `/tmp/wp5_initialroute_250.out` 与 `/tmp/wp5_initialroute_1000.out`。
+### 当前 wp5 exitgate20 出口课程 continuation（已淘汰）
+
+基于当前项目 `wp5_authoritative_cont/agent_1000`，只将辅助训练出生分布改为 `exitgate20`：正式出生 60%、坑洼入口 20%、第三 waypoint 出口附近 transition 20%；正式评估始终从官方出生点进行。`agent_250` 使用 `lr=2e-6, epochs=2`，seed2026、2 回合得到 `all_time_max_waypoints=4`、crossings `[2,0,0,1,0,0,0]`、`all_time_max_y=-0.533`、跌倒率 100%、平台率/停稳率均 0。随后从该节点以 `lr=1e-6, epochs=2` 续训到 `agent_500`，正式 seed2026、2 回合得到 `all_time_max_waypoints=4`、crossings `[1,0,0,1,0,0,0]`、`all_time_max_y=-0.445`、跌倒率 100%、平台率/停稳率均 0。虽然出现第四 waypoint，但没有 `y>=1.0` 或平台事件，后期仍全部跌倒，已停止，不接完整链；JSON 保存在 T4 `/tmp/wp5_exitgate20_eval250.out` 与 `/tmp/wp5_exitgate20_eval500.out`。
+### exitgate20 + post-pothole midwaypoints（已淘汰）
+
+基于当前项目 `wp5_authoritative_cont/agent_1000`，保留 exitgate20 的辅助出生分布，仅将出坑后 route 拆为 `(0.6,1.6) → (0.6,2.7) → (0,4.5)`，其他奖励、终止、动作和 PPO 设置不变。seed=7300、`lr=2e-6`、`epochs=2`，`agent_250` 正式出生 seed2026、2 回合：`all_time_max_y=-0.361`、`mean_episode_max_y=-0.896`、crossings `[2,0,0,1,0,0,0,0,0]`、`fall_rate=100%`、平台率/停稳率均 0。第四 waypoint 仍只能以跌倒结束，未进入 `y>=1.0`，已停止，不接完整链；JSON 保存在 T4 `/tmp/wp5_exitgate20_midwaypoints_eval250.out`。
+### exitgate20 延后 terrain action-scale blend（当前最佳诊断线，未通过）
+
+基于当前项目 `wp5_authoritative_cont/agent_1000`，保留 exitgate20 出生课程，只将 terrain action-scale 的 blend 区间从默认 `(-1.7,-1.4)` 延后至 `(-0.4,0.2)`，使机器狗通过坑洼出口后再逐步升到 `0.20`；奖励、命令、观测、终止和 PPO 不变。`agent_250`（seed=7400，`lr=2e-6, epochs=2`）正式 seed2026、2 回合在 1200 步内保持未跌倒，`all_time_max_waypoints=4`、ongoing 最大 Y `-0.595`、平台率/停稳率均 0。随后以 `lr=1e-6, epochs=2` 续训得到 `agent_250`（seed=7401），正式 seed2026 仍未完成回合，`all_time_max_waypoints=3`、ongoing 最大 Y `-0.680`、平台率/停稳率均 0。延后 blend 减少了早期出口跌倒，但尚未进入 `y>=1.0`，后续节点前进能力回落，暂不继续；JSON 保存在 T4 `/tmp/wp5_exitgate20_lateblend_eval250.out` 与 `/tmp/wp5_exitgate20_lateblend_eval500.out`。
+
+对 `lateblend agent_250` 做正式 seed2027–2029 复核（每 seed 2 回合）后，三 seed 均停在首段：`all_time_max_y` 分别为 `-1.446/-1.450/-1.432`，crossings 均为 `[2,0,0,0,0,0,0]`，无跌倒但均未完成回合；平台率和停稳率均为 0。该节点只对 seed2026 的单一轨迹表现较好，不能作为多 seed 主线，已淘汰；JSON 保存在 T4 `/tmp/wp5_lateblend250_2027.out` 至 `/tmp/wp5_lateblend250_2029.out`。
+
+补充对 seed2026 使用完整 4000 控制步、4 回合评估：实际在 2000 步完成 4 回合，`all_time_max_y=-1.059`、`mean_episode_max_y=-1.271`、crossings `[3,2,0,0,0,0,0]`、跌倒率 25%、超时率 75%，平台率和停稳率仍为 0。长窗口确认该节点只是慢速停留在前段，并非隐藏的出口成功；JSON 保存在 T4 `/tmp/wp5_lateblend250_long2026.out`。
+### 当前 wp5 二维 waypoint gate 对齐测试（已淘汰）
+
+审查发现当前 route command 使用二维目标，但默认 waypoint 推进按单调 `waypoint_y` 门提前切换。基于当前项目 `wp5_authoritative_cont/agent_1000`，仅开启 `route_waypoint_reach_threshold=0.35` 的二维距离 gate，其他奖励、命令、观测、终止、动作尺度和 PPO 不变；`agent_250`（seed=7500，`lr=2e-6, epochs=2`）正式 seed2026、2 回合：`all_time_max_y=-1.154`、`all_time_max_waypoints=2`、crossings `[1,1,0,0,0,0,0]`、跌倒率 100%、平台率/停稳率均 0。二维 gate 未改善出口，已停止，不接完整链；JSON 保存在 T4 `/tmp/wp5_2dgate_eval250.out`。
+### frontbridge_lr1e5 agent_10000 + lateblend 迁移（未通过）
+
+为复用当前项目已有出口能力而不使用往届成果，基于本项目 `frontbridge_lr1e5_cont/agent_10000`，只将 terrain action-scale blend 延后至 `(-0.4,0.2)`，其余环境和 PPO 不变；训练至 `agent_250`。正式出生 seed2026/2027、每 seed 2 回合：seed2026 `all_time_max_y=0.278`、crossings `[3,2,0,0,0,0,0]`、跌倒率 100%；seed2027 `all_time_max_y=1.602`、crossings `[3,2,1,0,0,0,0]`、跌倒率 100%；两个 seed 平台率和停稳率均为 0。随后以 `lr=5e-7, epochs=1` 保守续训，seed2026 `all_time_max_y=-0.399`、crossings `[3,1,0,0,0,0,0]`，seed2027 `-0.728`、`[2,0,0,0,0,0,0]`，均跌倒率 100%，平台率/停稳率均 0。该迁移保留了偶发 `y>1`，但没有稳定性，已停止，不接完整链；JSON 保存在 T4 `/tmp/frontbridge_lateblend_2026.out`、`/tmp/frontbridge_lateblend_2027.out`、`/tmp/frontbridge_lateblend_cont_2026.out` 和 `/tmp/frontbridge_lateblend_cont_2027.out`。
+### frontbridge agent_10000 contact-recovery 迁移（未通过）
+
+基于当前项目自己的 `frontbridge_lr1e5_cont/agent_10000`，仅开启 contact-recovery termination（接触时只有直立度 `<0.30`、角速度 `>2.5` 或 clearance `<0.18` 才终止），其他奖励、命令、观测、动作尺度和 PPO 不变。训练至 `agent_250` 后正式出生 seed2026/2027、每 seed 2 回合：seed2026 `all_time_max_y=0.051`、crossings `[2,1,0,0,0,0,0]`、跌倒率 0%；seed2027 `-0.257`、`[3,1,0,0,0,0,0]`、跌倒率 100%。两个 seed 均没有第三 waypoint、`y>=1.0`、平台事件或停稳成功；contact recovery 只减少部分早期终止，没有解决出口，已停止；JSON 保存在 T4 `/tmp/frontbridge_contact_eval_2026.out` 与 `/tmp/frontbridge_contact_eval_2027.out`。
+### frontbridge contact-recovery + lateblend 组合测试（未通过）
+
+基于当前项目 `frontbridge_lr1e5_cont/agent_10000`，同时启用两个已有单变量兼容项：contact-recovery termination（仅明显姿态失稳才终止）与 terrain action-scale 延后 blend `(-0.4,0.2)`；奖励、命令、观测和 PPO 不变。`agent_250` 正式出生 seed2026/2027、每 seed 2 回合：seed2026 `all_time_max_y=-0.463`、crossings `[3,1,0,0,0,0,0]`、跌倒率 100%；seed2027 `-0.505`、`[2,1,0,0,0,0,0]`、跌倒率 0%。两个 seed 均无第三 waypoint、`y>=1.0`、平台事件或停稳成功；组合只改善接触终止，不产生出口能力，已停止；JSON 保存在 T4 `/tmp/frontbridge_contact_lateblend_2026.out` 与 `/tmp/frontbridge_contact_lateblend_2027.out`。
+### 当前项目完整链正式出生诊断（未通过）
+
+使用当前项目自己的 `frontbridge_lr1e5_cont/agent_10000` 作为前段，接入当前项目已有后段链：`post-third → ramp400 → ramp600 → ramp-top → strict platform stand`，切换边界为 `y=1.05,2.25,4.0,6.0,6.9`。正式出生 seed2027、2 回合、2500 控制步结果：`stage_entry_counts=[2,0,0,0,0,0]`，前段 `all_time_max_y=-0.701`、waypoint crossing `[2,0,0,0,0,0,0]`，未触发任何后段接管，平台率和停稳率均为 0。该证据确认完整链瓶颈仍是正式出生到前段出口，不能录制最终视频；JSON 保存在 T4 `/tmp/fullchain_frontbridge2027.out`。
+## 2026-08-13：frontbridge 四 GPU 单变量短矩阵（当前项目代码）
+
+为验证当前项目 `frontbridge_lr1e5_cont/agent_10000` 出口瓶颈，启动四条明确单变量线，均从当前项目 checkpoint warm-start，学习率 `1e-6`、PPO epochs=2、checkpoint interval=250。第一次启动发现三条命令误带不支持的 `--headless` 参数，未产生训练结果；修正为仓库实际 CLI 后重新启动，未与其他项目进程竞争 GPU。GPU0 基线、GPU1 仅延后 terrain action-scale blend、GPU2 仅 contact-recovery termination、GPU3 两者组合，均产出 `agent_250`。
+
+正式出生点 seed=2026、2 回合、1800 控制步的快速验收：
+
+| 线 | all_time_max_y | max_episode_y | mean_episode_max_y | waypoint crossings（前几项） | fall_rate | ever_on_platform_rate | stable_success_rate |
+|---|---:|---:|---:|---|---:|---:|---:|
+| base | 0.303 | -0.201 | -0.201 | [3,2,0,...] | 1.00 | 0 | 0 |
+| late-blend | 0.021 | 0.021 | 0.021 | [3,2,0,...] | 1.00 | 0 | 0 |
+| contact-recovery | -0.544 | -0.544 | -0.588 | [2,1,0,...] | 1.00 | 0 | 0 |
+| contact+late-blend | -1.006 | -1.097 | -1.133 | [2,1,0,...] | 1.00 | 0 | 0 |
+
+基线仍只到第二 waypoint，三条兼容变体均退化，且没有任何平台事件或连续停稳事件。因此按“稳定成功优先、连续两个检查点无出口改善即停止”的协议，四条 `agent_250` 均不进入完整链，也不录制最终视频；相关结果仅为当前项目诊断证据。
+## 2026-08-13：往届 waypoint 兼容修正验证（当前项目代码）
+
+审查发现 `reference_aligned` 有两处实际差异：waypoint 顺序误把 `(0,0)` 放在 `(-3,0)` 之前；PPO 继承了当前导航默认的 `4096/48/6/32/3e-4`，而往届为 `2048/24/5/3/1e-4`。已做最小修正，并新增独立 PPO 注册 `VBotSection011ReferenceAlignedPPOConfig`，实际配置为 `num_envs=2048`、`rollouts=24`、`learning_epochs=5`、`mini_batches=3`、`learning_rate=1e-4`。修正后的 `reference_aligned_routefix` agent_250/500 在正式 seed2026、8 回合评估仍第一 waypoint 为 0，最大 Y 约 `-1.99/-2.05`，跌倒率 100%，平台/停稳率均 0。
+
+随后修复了一个此前未生效的 `initial_heading_uses_route_target` 开关，使 reset 可以真正朝向首个 waypoint。`reference_aligned_headingfix3` agent_500 在正式 seed2026、2 回合、1200 步评估为 `all_time_max_y=-1.818`、waypoint crossings 全 0、跌倒率 0%、`ever_on_platform_rate=0`、`stable_success_rate=0`。首 waypoint 朝向兼容修正没有带来前进改善，训练停止；headingfix2/3 均不接完整链。
+### reference waypoint-command compatibility (已淘汰)
+
+在 `reference_aligned` 上仅启用往届 `waypoint_nav` 的 body-frame 比例命令（`runnerup_waypoint_command=True`，速度限幅 `[-0.6,-0.4]~[0.8,0.4]`、yaw rate 限幅 `0.8`），不改变 reward、waypoint、PPO 或 termination。当前项目自己的 `reference_aligned_runnerupcmd/agent_750` 从正式出生 seed2026、2 回合、1200 控制步评估：`all_time_max_y=-2.008`、waypoint crossings 全 0、跌倒率 0%、`ever_on_platform_rate=0`、`stable_success_rate=0`。该命令语义修正没有产生前进能力，停止训练，不接完整链。
+### reference curriculum / route observation compatibility（已淘汰）
+
+往届训练使用 `curriculum_spawn_probabilities=(0.7,0.15,0.15)`：70% 正式出生、15% 坑洼局部出生、15% 出坑前 transition 出生。当前项目新增 `reference_curriculum_compat` 仅启用该采样课程，保留已修正的 waypoint 顺序、PPO、首 waypoint 朝向和 body-frame 命令；课程可正常启动，但 smoke `agent_250` 正式 seed2026 仍为 `all_time_max_y=-1.549`、waypoint crossings 全 0、跌倒率 0%、平台/停稳率 0。
+
+随后仅打开 `observe_route_target=True`，让观测目标与 active waypoint 命令一致。`reference_curriculum_routeobs/agent_250` 正式 seed2026、2 回合、1200 步：`all_time_max_y=-1.549`、waypoint crossings 全 0、跌倒率 100%、`ever_on_platform_rate=0`、`stable_success_rate=0`。课程和目标观测均未改善第一 waypoint，停止训练，不接完整链。
+
+至此，当前项目已对往届结构中可直接迁移的 reset 朝向、waypoint 顺序、body-frame command、active-target observation、mixed curriculum 和 PPO 核心超参数完成独立消融；所有候选均为当前项目自身代码，均未达到正式出生多 seed 平台成功门槛。
+### current frontbridge warm-start into runner-up curriculum (未通过)
+
+为保留当前项目已有 locomotion 能力，同时验证往届课程是否能提供后续 waypoint 学习信号，使用当前项目自己的 `frontbridge_lr1e5_cont/agent_10000` warm-start 到已修正的 `reference_curriculum` 环境；重置 PPO optimizer，`learning_rate=1e-5`、epochs=2。warm-start 后的 `agent_250` 正式 seed2026、2 回合、1200 步达到 `all_time_max_y=-1.187`，较 scratch curriculum 的 `-1.55` 有改善，但第一 waypoint 仍为 0，平台/停稳率为 0。以 `lr=2e-6` 续训得到 continuation `agent_250`，正式 seed2026、4 回合、1800 步为 `all_time_max_y=-1.242`、`mean_episode_max_y=-1.713`、waypoint crossings 全 0、跌倒率 100%、平台/停稳率均 0。续训未改善第一 waypoint，停止，不接完整链。
+### current Section1 route observation warm-start（当前最强前段诊断线，未通过）
+
+为保留当前项目自己的坑洼 locomotion，而不改变往届完整蛇形路线，新增 `wp5_routeobs`：仅在已有 Section1 `dense_entry_wp5` 上打开 `observe_route_target=True` 和首 waypoint 初始朝向，保留原有 7 个坑洼/坡面 route target、`reward_waypoint=5`、动作尺度和当前 PPO。使用当前项目自己的 `frontbridge_lr1e5_cont/agent_10000` warm-start，重置 optimizer，`lr=1e-5, epochs=2`。正式 seed2026、4 回合、1800 步的 `agent_250` 达到 `all_time_max_y=-0.276`，`mean_episode_max_y=-0.791`，waypoint crossings `[5,6,4,1,0,0,0]`，说明 active-target 观测修正恢复了前四个坑洼 waypoint 的运动能力；但跌倒率仍 100%，平台/停稳率均 0。
+
+同一 `agent_250` 以 `lr=2e-6, epochs=2` continuation 后，正式 seed2026、4 回合结果为 `all_time_max_y=-0.169`、`mean_episode_max_y=-0.816`、crossings `[5,6,3,1,0,0,0]`、跌倒率 100%、平台/停稳率 0。随后只启用已有 contact-recovery termination（直立度/角速度/离地高度联合判断），其余 routeobs、reward、动作和 PPO 不变；`agent_250` 正式 seed2026 为 `all_time_max_y=-0.393`、crossings `[5,3,2,1,0,0,0]`、跌倒率 100%、平台/停稳率 0。contact recovery 没有把第四 waypoint 后的动态状态转化为可持续出口，停止该线，不接完整链。
+### routeobs + delayed terrain action-scale（已淘汰）
+
+在已验证能覆盖前四 waypoint 的 `wp5_routeobs` 上，仅将 terrain action-scale blend 延后到 `(-0.4,0.2)`，其余观测、route、reward、termination 和 PPO 不变；使用当前项目自己的 `frontbridge agent_10000` warm-start，`lr=1e-5, epochs=2`。正式 seed2026、4 回合、1800 步的 `agent_250`：`all_time_max_y=-0.598`、`mean_episode_max_y=-0.628`、crossings `[4,4,2,1,0,0,0]`、跌倒率 100%、平台/停稳率 0。相较 routeobs 基线 `-0.276` 明显退化，延后 blend 不能解决出口，停止该线。
+### routeobs + post-pothole midwaypoints（未通过）
+
+在已验证的 `wp5_routeobs` 结构上，仅将出坑后的单个远端目标 `(0,4.5)` 拆为 `(0.6,1.6) → (0.6,2.7) → (0,4.5)`，保留 active-target 观测、奖励、动作尺度、终止和 PPO。当前项目自己的 `frontbridge agent_10000` warm-start，`lr=1e-5, epochs=2` 的 `agent_250` 正式 seed2026、4 回合结果：`all_time_max_y=-0.332`、`mean_episode_max_y=-0.332`、crossings `[4,5,3,1,0,0,0,0,0]`、跌倒率 100%、平台/停稳率 0。中间 waypoint 没有消除第四 waypoint 后的跌倒，停止该线。
+### routeobs + damping=8（诊断保留，未通过）
+
+在已验证 `wp5_routeobs` 上仅将 PD damping 从 6 调为 8，保留 routeobs、原 Section1 waypoint、reward、action scale 和 PPO；当前项目自己的 `frontbridge agent_10000` warm-start，`lr=1e-5, epochs=2`。正式 seed2026、4 回合的 `agent_250`：`all_time_max_y=1.539`，`mean_episode_max_y=-0.104`，crossings `[6,4,3,2,0,0,0]`，首次出现 `y>=1.0`，但跌倒率 100%、平台/停稳率 0。正式 seed2027 同一 checkpoint 仅到 `-0.394`，crossings `[6,6,5,3,0,0,0]`，跌倒率 100%、平台/停稳率 0，说明 seed 敏感，不能作为成功。
+
+从该 checkpoint 以 `lr=2e-6, epochs=2` continuation 后，seed2026 退化为 `all_time_max_y=-0.668`、crossings `[4,4,4,0,0,0,0]`、跌倒率 100%、平台/停稳率 0，已停止。不接完整链、不录视频。
+### routeobs + damping=8 + contact recovery（未通过）
+
+组合已验证的 `routeobs+damping08` 与 contact-recovery termination，其他配置不变；当前项目自己的 `frontbridge agent_10000` warm-start，`lr=1e-5, epochs=2`。正式 seed2026、4 回合的 `agent_250`：`all_time_max_y=1.110`、`mean_episode_max_y=-0.073`、crossings `[5,4,2,1,0,0,0]`、跌倒率 100%、平台/停稳率 0；跌倒时平均 clearance `0.216`、角速度 `2.286`，较单独 damping08 的姿态统计改善，但仍不能持续出口。seed2027 同一 checkpoint 仅到 `-0.825`、crossings `[3,4,2,0,0,0,0]`、跌倒率 0%、平台/停稳率 0。跨 seed 仍不稳定，停止，不接完整链。
+### routeobs+damping08 的观测归一化与姿态惩罚消融（已淘汰）
+
+为排除 warm-start 观测统计和姿态惩罚的影响，新增 `--reset-state-preprocessor`，加载当前项目 policy 权重后重置 JAX observation RunningStandardScaler，同时保留 policy 权重并重置 optimizer。应用于 `routeobs+damping08` 的 continuation，正式 seed2026、4 回合结果为 `all_time_max_y=-0.283`、crossings `[6,7,5,3,0,0,0]`、跌倒率 100%、平台/停稳率 0；旧 preprocessor 不是主因。
+
+随后仅将 `penalty_orientation` 从 1.0 调到 2.0，正式 seed2026、4 回合的 `agent_250` 为 `all_time_max_y=-0.377`、crossings `[3,4,3,1,0,0,0]`、跌倒率 0%、平台/停稳率 0。更强姿态惩罚压制了必要的动态出口动作，停止该线。
+### routeobs+damping08 loose contact recovery（已淘汰）
+
+仅将 contact-recovery 阈值放宽为 `upright_cos>-0.10、angular_xy<=4.0、clearance>=0.10`，保留 routeobs、damping=8、reward、动作和 PPO。当前项目自己的 `frontbridge agent_10000` warm-start，`lr=1e-5, epochs=2` 的 `agent_250` 正式 seed2026、4 回合：`all_time_max_y=-0.388`、`mean_episode_max_y=-0.418`、crossings `[5,6,4,3,0,0,0]`、跌倒率 100%、平台/停稳率 0。放宽终止没有释放出口能力，停止该线。
+### damping08 continuation 保留 optimizer（未通过）
+
+此前所有 continuation 重置 optimizer，可能导致 damping08 的偶发出口能力退化；本轮从当前项目自己的 `routeobs+damping08/agent_250` 继续训练，保留 checkpoint optimizer state，仅将学习率降为 `5e-7`、epochs=2。结果：seed2026 `all_time_max_y=-0.139`、crossings `[6,6,4,4,0,0,0]`、跌倒率 100%、平台/停稳率 0；seed2027 `all_time_max_y=-0.694`、crossings `[4,3,2,0,0,0,0]`、跌倒率 100%、平台/停稳率 0。保留 optimizer 没有解决跨 seed 出口稳定性，停止该线。
+
+### exit curriculum 正式多 seed 复核（已淘汰）
+
+在 `routeobs+damping08` warm-start 上加入 70% 正式出生、15% 坑洼入口、15% 出坑前 transition 的辅助课程，正式评估仍严格从官方出生点进行。`agent_250` seed2026：`all_time_max_y=-0.563`、`mean_episode_max_y=-0.932`、crossings `[5,6,3,1,0,0,0]`、fall rate `1.0`；seed2027：`all_time_max_y=-0.042`、`mean_episode_max_y=-0.414`、crossings `[2,3,2,0,0,0,0]`、fall rate `1.0`。两个正式 seed 的 `ever_on_platform_rate=0`、`stable_success_rate=0`，故停止该线，不接完整链。
+
+### routeobs+damping08 no-gate（进行中）
+
+随后新增并停止了往届结构 scratch 线：`reference_aligned_routeobs_smooth` 使用往届 9 个蛇形 waypoint、body-frame command、首 waypoint 初始朝向、`tau=0.25s` 平滑和往届 PPO，从零训练且不加载往届 checkpoint。agent_250 正式 seed2026/2027 最大 Y `-1.997/-2.078`，agent_500 为 `-1.859/-2.006`，agent_750 为 `-1.822/-1.913`，均无 waypoint/platform success，停止该线。该结果表明往届完整蛇形 route 与当前 Section1 专用地形/API 存在不可直接复制的差异。
+
+### 出坑 waypoint 横向中心化（已淘汰）
+
+在 no-gate+damping08 当前项目 checkpoint 上，仅将第四 waypoint 从 `(0.6,2.7)` 改为 `(0.0,2.7)`，保持其他 route、reward、观测、damping 和 PPO 不变。初始 agent_250 正式 seed2026/2027 最大 Y `1.638/-0.772`；以 `lr=2e-6` continuation 后为 `0.138/-0.921`。两阶段均 `fall_rate=1.0`、`ever_on_platform_rate=0`、`stable_success_rate=0`，横向中心化未形成跨 seed 出口，停止该线。
+
+### 坡面动作尺度与训练 seed 复核（未通过）
+
+跌倒位置直方图显示失败主要集中在 `y>=1.2`。仅将坡面段 action scale 调为 0.15 后，agent_250 正式 seed2027 达到 `all_time_max_y=2.036`、`mean_episode_max_y=1.946`，但 seed2026/2028/2029 分别仅为 `-0.335/-0.565/-0.005`；四个 seed 平台率和停稳率均为 0。0.17 变体两个正式 seed 均退化。随后同一 slope15 配置并行训练 seed8860–8863，只有 seed8863 在正式 seed2026 偶发到 `1.250`，其余训练 seed 与评估 seed 均未形成跨 seed 出口，说明 PPO 随机性较大但并非稳定解。
+
+### post-pothole midwaypoint 组合（已淘汰）
+
+在有效的 damping08+no-gate 组合上补测 `(0.6,1.6)→(0.6,2.7)→(0,4.5)`，正式 seed2026–2029 最大 Y 为 `-0.205/-0.509/-0.639/0.851`，平台率与停稳率均为 0，未形成稳定出口。
+
+### 单一策略坡面混合课程与完整链诊断（当前最好链证据，未成功）
+
+`slopecurr` 使用一个 policy，训练出生为 70% 正式、15% 坑洼入口、15% 坡面入口，正式评估仍只用官方出生。agent_250 正式 seed2026–2029 最大 Y 为 `0.137/1.827/1.227/-0.281`；seed2027/2028 均进入 `y>=1.0`，但平台率和停稳率仍为 0。接入已有 `post-third→ramp400→ramp600→ramp-top→strict stand` 后，第一边界 1.05 的 stage counts 分别为 seed2027 `[8,3,0,0,0,0]`、seed2028 `[9,1,0,0,0,0]`；将第一边界后移到 1.5 后，seed2027 首次达到 `[9,3,1,0,0,0]` 并触发 ramp400，最大 Y `2.255`，seed2028 为 `[9,0,0,0,0,0]`。第二边界后移到 2.5 后退化为 `[8,3,0,0,0,0]`。所有完整链评估的 `ever_on_platform_rate=0`、`stable_success_rate=0`；因此不能录制最终视频或宣称完成。
+
+### 平台事件与 stand policy 筛选（未通过）
+
+补充测试：使用已有 relaxed hold040/050 stand checkpoint，并将最后切换边界从 `y=6.9` 后移到 `y=7.3`。relaxed040 链 seed2027 最大 Y `8.111`、`ever_on_platform_rate=0.2`，但 `all_time_max_stable_hold_steps=1`；strict035 链最大 Y `7.823`、平台率 `0.2`，稳定保持 0。后移切换没有解决平台停稳，仍无 `stable_success_rate>0`。
+
+另查已有 `strict_hold100` checkpoint：在其独立平台出生环境中，seed2027 达到 `stable_success_rate=1.0`、`all_time_max_stable_hold_steps=100`、`fall_rate=0`，证明 stand policy 本身具备 1 秒停稳能力；但接入正式完整链的 seed2027/2028 均未到平台（最大 Y `1.864/-0.109`），说明剩余问题是前段到达平台及动态交接的多 seed 可靠性，而非 stand policy 的局部能力。
+
+### slopecurr 长 continuation（未通过）
+
+从当前项目自己的 `slopecurr agent_250` 以 `lr=2e-6` 并行 continuation seed8890–8893。agent_500 正式 seed2026 的最大 Y 为 `1.789/1.027/1.690/0.294`；其中较好的 8890 在 seed2027/2028/2029 分别为 `1.857/0.164/1.235`，仍无平台事件。8892 在 seed2027 达到 `1.845`，但其他 seed 评估未产生可交付平台证据。长 continuation 没有消除 seed 方差，全部停止，目标门槛仍未满足。
+
+固定前五段最佳链（slopecurr → post-third s348 agent_1000 → ramp400 s2059 agent_500 → ramp600 → ramp-top），seed2027 首次出现真实平台事件：`all_time_max_y=7.607`、`ever_on_platform_rate=0.2`、六阶段均被调用 `[9,3,1,1,1,1]`，但 `all_time_max_stable_hold_steps=3`，远低于 1 秒所需约 100 control steps，`stable_success_rate=0`。更换已有 relaxed hold030 stand 后最大 Y 达到 `8.376`，平台率仍 `0.2`，但稳定保持为 0；relaxed hold020 及 strict035 也未产生停稳成功。一个 strict030 路径不存在，评估被文件错误跳过。平台事件是单 seed、单回合现象，不能作为最终成果证据。
+
+该线后续已完成评估并淘汰：初始 agent_250 seed2026/2027 最大 Y 为 `1.889/-0.299`，continuation 为 `2.031/0.258`；所有正式评估均 `fall_rate=1.0`，平台率和停稳率为 0。
+
+### no-gate + command smoothing（已淘汰）
+
+往届 waypoint command 使用 `tau=0.25s` 低通平滑；当前项目仅加入该平滑，不改 reward、termination、waypoint 或 PPO。初始 agent_250 seed2026/2027 最大 Y 为 `0.485/1.707`，continuation 后为 `-0.725/1.186`；所有评估均跌倒且平台率、停稳率为 0，停止该线。
+
+### no-gate + recovery（已淘汰）
+
+在 no-gate+damping08 上仅允许短暂 base scrape，正式 seed2026/2027 的 agent_250 最大 Y 为 `-0.444/-0.221`，均 100% 跌倒，平台率与停稳率为 0，停止该线。
+
+基于当前项目自己的 `routeobs+damping08/agent_250` warm-start，仅关闭 `gate_progress_by_stability` 和 `gate_motion_by_angular_stability`，保持 route observation、damping=8、奖励权重、出生分布和 PPO 其余设置不变。训练标签为 `wp5_damp08_nogate_frontwarm`，正式评估仍从官方出生点；完成 `agent_250` 后用 seed2026/2027 记录完整指标。
+
+初始 `agent_250` 的正式评估为：seed2026 `all_time_max_y=1.889`、`mean_episode_max_y=1.889`、crossings `[4,5,3,2,0,0,0]`、`fall_rate=1.0`；seed2027 `all_time_max_y=-0.299`、`mean_episode_max_y=-0.842`、crossings `[6,5,2,1,0,0,0]`、`fall_rate=1.0`。以 `lr=2e-6` continuation 得到的 `agent_250`：seed2026 `all_time_max_y=2.031`、`mean_episode_max_y=0.231`；seed2027 `all_time_max_y=0.258`、`mean_episode_max_y=-0.564`。四次正式评估的平台率和停稳率均为 0，且跨 seed 没有稳定进入 `y>=1.0`，因此停止该线。
+### 2026-08-13：slopecurr 高学习率 continuation 四 GPU 复核（已淘汰）
+
+四条 continuation 均从当前项目自己的 `slopecurr agent_250` warm-start，仅改变学习率为 `1e-5`、`learning_epochs=2` 并重置 optimizer；训练 seed 为 8910–8913。正式出生点 seed=2026、4 回合、1800 control steps 评估分别为：`all_time_max_y=0.321/0.099/-0.405/0.120`，`mean_episode_max_y=-0.623/-1.132/-0.412/-0.735`，waypoint crossings 分别为 `[3,1,0,0,0,0,0]`、`[2,0,0,0,0,0,0]`、`[2,1,0,0,0,0,0]`、`[3,1,0,0,0,0,0]`，四条线 `fall_rate=1.0`、`ever_on_platform_rate=0`、`stable_success_rate=0`。它们没有第三 waypoint、平台或停稳事件，已停止且不接完整链。
+
+当前仍没有满足正式出生多 seed 验收门槛的当前项目 checkpoint。`slopecurr agent_250` 的少数 seed 曾进入 `y>=1.0`，完整链也曾出现一次真实平台事件，但最高稳定保持仅 3 control steps；局部 `strict_hold100` stand 成功不能替代正式交接证据。因此自动化保持暂停，不录制最终视频、不推送 GitHub、不更新飞书；下一次训练需先定义可解释的单变量和正式多 seed 验收。
+
+### 2026-08-13：slopecurr 往届 body-frame command 单变量复核（已淘汰）
+
+基于当前项目自己的 `slopecurr agent_250`，新增独立环境 `vbot_locomotion_section011_reference_current_route_safe_dense_entry_wp5_routeobs_damping08_nogate_slopecurr_runnerupcmd`，仅启用往届 `waypoint_nav` 的 body-frame 比例命令（`kp=0.8`、速度限幅 `vx[-0.6,0.8]`、`vy[-0.4,0.4]`、yaw 限幅 `0.8`）。混合出生课程、route observation、damping=8、no-gate、奖励、观测和 PPO 均保持不变；四条训练 seed 为 9010–9013，使用 `lr=2e-6`、`epochs=2`、reset optimizer，首个 checkpoint 为 `agent_250`。
+
+正式出生点 seed=2026、2 环境、2 回合、600 control steps 的快速评估：
+
+| 训练 seed | all_time_max_y | mean_episode_max_y | waypoint crossings | fall_rate | ever_on_platform_rate | stable_success_rate |
+|---:|---:|---:|---|---:|---:|---:|
+| 9010 | 1.441 | 0.000 | `[0,0,0,0,0,0,0]` | 0.0 | 0 | 0 |
+| 9011 | 1.616 | 1.616 | `[1,1,1,0,0,0,0]` | 1.0 | 0 | 0 |
+| 9012 | 1.488 | -1.653 | `[0,0,0,0,0,0,0]` | 1.0 | 0 | 0 |
+| 9013 | 1.620 | 1.620 | `[0,0,0,0,0,0,0]` | 1.0 | 0 | 0 |
+
+body-frame command 没有带来平台事件或停稳成功，且三条线 100% 跌倒，剩余训练和评估进程已停止。该单变量方向淘汰，不接完整链；所有 checkpoint 仅作为当前项目诊断证据。
+
+### 2026-08-13：slopecurr swing-foot clearance shaping（已淘汰）
+
+针对失败集中在坑洼出口的现象，在当前项目自己的 `slopecurr agent_250` 上仅加入已有的 swing-foot clearance 奖励：`reward_foot_clearance=0.5`、目标足端离地高度 `0.18m`，作用区间 `y∈[-1.6,1.8]`。不改变 route、command、观测、damping、no-gate、课程或 PPO；训练 seed 为 9020–9023，`lr=2e-6`、`epochs=2`，首个 checkpoint 为 `agent_250`。
+
+正式出生点 seed=2026、2 环境、2 回合、600 control steps 的评估中，9020 达到 `all_time_max_y=1.594`、crossings `[1,1,0,0,0,0,0]`、`fall_rate=0`；9021 达到 `1.722`、`[2,2,2,0,0,0,0]`、`fall_rate=1.0`；9022 达到 `1.594`、`[2,2,2,1,0,0,0]`、`fall_rate=1.0`；9023 评估进程在记录完整 JSON 前超时，未获得可用成功证据。四条线均 `ever_on_platform_rate=0`、`stable_success_rate=0`，没有平台事件或停稳事件，已停止，不接完整链。
+### 2026-08-13：slopecurr 目标方向速度奖励加倍（已淘汰）
+
+基于当前项目自己的 `slopecurr agent_250`，仅将 `reward_target_direction_velocity` 从 2.0 调为 4.0；训练 seed 为 9030–9033，`lr=2e-6`、`epochs=2`。正式出生点 seed=2026、2 环境、2 回合、600 control steps 的结果为：9030 `max_y=1.354`、crossings `[1,1,1,1,0,0,0]`、fall `0`；9031 `1.359`、`[2,1,1,0,0,0,0]`、fall `1.0`；9032 `1.830`、`[1,1,1,1,0,0,0]`、fall `1.0`；9033 `1.647`、`[1,1,1,1,0,0,0]`、fall `0`。四条线均 `ever_on_platform_rate=0`、`stable_success_rate=0`，没有平台事件或停稳成功，已停止，不接完整链。
+### 2026-08-13：slopecurr 当前项目完整链多 seed 复核（未通过）
+
+使用当前项目自己的 `slopecurr agent_250` 串接 `base → post-third(s348 agent_1000) → ramp400(s2059 agent_500) → ramp600 → ramp-top → strict_hold100 stand`，切换边界为 `1.5, 2.25, 4.0, 6.0, 6.9`。正式出生点 seed 2026、2027，8 环境、8 回合、2200 control steps：seed2026 `all_time_max_y=1.677`、`stage_entry_counts=[16,1,0,0,0,0]`、crossings `[9,8,8,3,0,0,0]`、fall `37.5%`；seed2027 `all_time_max_y=1.642`、`stage_entry_counts=[16,1,0,0,0,0]`、crossings `[9,12,10,7,0,0,0]`、fall `100%`。两 seed 均 `ever_on_platform_rate=0`、`stable_success_rate=0`、最大稳定保持 0，未进入 ramp400；完整链不接视频、不推送、不更新飞书。
+### 2026-08-13：slopecurr 保留 optimizer 的低学习率 continuation（已淘汰）
+
+从当前项目自己的 `slopecurr agent_250` 继续训练，唯一变量为保留 checkpoint optimizer state，并将学习率降至 `5e-7`、`learning_epochs=2`；四条训练 seed 为 9040–9043，正式出生点 seed=2026、2 环境、2 回合、600 control steps。
+
+结果：9040 `all_time_max_y=1.678`、crossings `[1,0,0,0,0,0,0]`、fall `0`；9041 `1.344`、`[2,2,2,1,0,0,0]`、fall `1.0`；9042 `1.392`、`[2,2,2,2,0,0,0]`、fall `1.0`；9043 `1.762`、`[1,1,0,0,0,0,0]`、fall `1.0`。四条线均 `ever_on_platform_rate=0`、`stable_success_rate=0`，保留 optimizer 没有形成稳定出口，已停止，不接完整链。
+### 2026-08-13：frontbridge agent_17500 接管边界诊断（未通过）
+
+使用当前项目自己的 `frontbridge_lr1e5_cont/agent_17500`，串接已有 `post-third → ramp400 → ramp600 → ramp-top → strict_hold100 stand`，正式出生 seed2027、4 环境、4 回合。比较第一接管边界 `y=0.8` 与 `y=1.0`（后续边界固定为 `2.25,4.0,6.0,6.9`）：
+
+| 第一边界 | all_time_max_y | stage_entry_counts | fall_rate | ever_on_platform_rate | stable_success_rate | max stable hold |
+|---:|---:|---|---:|---:|---:|---:|
+| 0.8 | 1.700 | `[7,2,0,0,0,0]` | 100% | 0 | 0 | 0 |
+| 1.0 | 7.541 | `[5,2,1,1,1,1]` | 100% | 0 | 0 | 2 |
+
+边界 `1.0` 确实让一条轨迹调用了完整后段并到达平台附近，但仍没有满足平台判定或 1 秒停稳；`y=0.8` 更早接管反而在 post-third 前失败。该结果说明切换边界影响很大，但单 seed、单次极端前冲不能作为成功证据；继续扫描边界前必须先解决 base checkpoint 的跨 seed 稳定性。
+### 2026-08-13：平台纵向区域高度诊断（未通过）
+
+为解释某次链评估中 `all_time_max_y≈7.54` 但 `ever_on_platform_rate=0` 的现象，扩展 `scripts/evaluate_section011_policy_chain.py` 记录最大 Y 对应的 `(x,z)`，以及进入平台纵向区域 `y>=6.9` 时的高度/横向统计。对当前项目自己的 `frontbridge_lr1e5_cont/agent_17500`、seed2027、第一切换边界 `y=1.0` 的复核结果为：`all_time_max_y=1.307`、最大 Y 对应 `x=0.915,z=0.245`、平台纵向区域样本数 `0`、stage entries `[6,2,0,0,0,0]`。这次复核没有到达平台纵向区域，确认平台率为 0 不是统计门误判，而是前段在坡面前失效；此前 `y≈7.5` 属于单次非重复极端轨迹，不能作为成功证据。
+### 2026-08-13：提前切换 strict stand 的链诊断（未通过）
+
+保持当前项目自己的 `frontbridge agent_17500`、post-third、ramp400、ramp600 和 ramp-top 不变，仅将 stand 接管边界从 `y=6.9` 提前到 `y=6.0`（中间 ramp-top 边界为 `5.5`），正式 seed2027、4 环境、4 回合复核结果为：`all_time_max_y=1.307`、`stage_entry_counts=[6,2,0,0,0,0]`、`fall_rate=100%`、平台率/停稳率均为 0，最大 Y 对应 `x=0.915,z=0.245`，平台纵向区域样本数为 0。提前 stand 接管没有改善，且该次前段未到达后段；不再扫描 stand 边界，继续重点放在正式前段动态稳定性。
+### 2026-08-13：frontbridge agent_17500 权威标准 evaluator 多 seed 复核（未通过）
+
+对当前项目自己的 `frontbridge_lr1e5_cont/agent_17500` 从正式出生点进行标准 evaluator 复核，评估 seed 2026–2029，每 seed 4 环境、4 回合、1800 control steps：
+
+| seed | all_time_max_y | mean_episode_max_y | waypoint crossings | fall_rate | ever_on_platform_rate | stable_success_rate |
+|---:|---:|---:|---|---:|---:|---:|
+| 2026 | -0.690 | -1.070 | `[7,0,0,0,0,0,0]` | 100% | 0 | 0 |
+| 2027 | 15.183 | 1.097 | `[6,5,2,1,1,1,1]` | 100% | 0 | 0 |
+| 2028 | -0.370 | 0.000 | `[4,2,0,0,0,0,0]` | 0% | 0 | 0 |
+| 2029 | 1.511 | -0.242 | `[7,3,1,0,0,0,0]` | 100% | 0 | 0 |
+
+seed2027 的 `y=15.18` 是跌倒后的非物理极端前冲（回合均未形成平台事件），不能视为成功。四个正式 seed 的平台率和严格停稳率均为 0；该 checkpoint 不能进入完整交付链或最终视频，仅保留为当前项目的诊断基线。
+### 2026-08-13：全量评估输出候选审计（局部成功不等于正式成果）
+
+对 T4 `/tmp` 中所有包含 `ever_on_platform_rate` 或 `stable_success_rate` 的 JSON/日志做了全量筛选。排名靠前的 335 条记录几乎全部来自 `platform_stand_*`、`strict_hold*` 等局部平台出生 specialist；例如 strict-100 stand 在局部平台环境中可达到 `ever_on_platform_rate=1.0`、`stable_success_rate=1.0`，但这类评估没有经过正式出生、坑洼、坡面和策略交接，不能进入最终交付。
+
+将筛选范围限制为当前项目自己的正式出生完整链后，没有发现同时满足 `ever_on_platform_rate>0` 与 `stable_success_rate>0` 的多 seed checkpoint。此前完整链中唯一的单 seed 平台事件也只有 3 个 control steps 稳定保持，远低于 1 秒要求。后续候选筛选必须同时核对环境、出生协议、完整阶段调用和多 seed 指标，不能按单个日志中的成功率排序。
+### 2026-08-13：frontbridge agent_10000 当前完整链复核（未通过）
+
+为复核历史上曾偶发 `y>1` 的当前项目 `frontbridge_lr1e5_cont/agent_10000`，使用固定后段链和正式出生 seed2026、8 环境、8 回合、2200 control steps。结果为 `all_time_max_y=0.502`、`stage_entry_counts=[14,0,0,0,0,0]`、waypoint crossings `[13,5,0,0,0,0,0]`、`fall_rate=100%`、平台率/停稳率均为 0，平台纵向区域样本数为 0。当前代码和评估器下该 checkpoint 没有触发任何后段，不再作为最终候选。
+### 2026-08-13：slopecurr 保守长训启动（进行中）
+
+为区分短训更新方差与训练时间不足，基于当前项目自己的 `slopecurr agent_250` 启动四条长训复制线：训练 seed 9100–9103，`learning_rate=1e-6`、`learning_epochs=1`、reset optimizer、2048 environments、每 250 batched steps 保存 checkpoint，目标 10000 steps。自动化保持暂停，由目标模式在关键节点正式评估。
+
+首个 `agent_250` 的正式 seed2026 快速评估（2 环境、2 回合、600 control steps）：9100 `all_time_max_y=4.684`、crossings `[1,1,1,1,1,0,0]`、fall `0`；9101 `1.435`、`[1,1,0,0,0,0,0]`、fall `0`；9102 `1.776`、`[1,1,1,1,0,0,0]`、fall `1.0`；9103 `1.375`、`[2,2,1,1,0,0,0]`、fall `1.0`。四条线平台率与停稳率仍为 0，但 seed9100 已到达第五 waypoint 且未跌倒，因此长训继续，不以短回合极值宣称成功。
+### 2026-08-13：slopecurr 保守长训 agent_1000 正式筛选（进行中）
+
+四条 `lr=1e-6, epochs=1` 长训复制线的 `agent_1000` 在正式 seed2026、2 环境、2 回合、600 control steps 下结果为：9100 `all_time_max_y=1.437`、crossings `[1,1,1,1,0,0,0]`、fall `0`；9101 `2.084`、`[2,2,1,0,0,0,0]`、fall `1.0`；9102 `1.575`、`[1,1,0,0,0,0,0]`、fall `0`；9103 `1.413`、`[1,1,1,1,0,0,0]`、fall `0`。四条线均 `ever_on_platform_rate=0`、`stable_success_rate=0`。没有出现平台成功，但也没有全线退化到起点，继续观察后续 2500-step 节点。
+### 2026-08-13：slopecurr 保守长训 agent_1500 筛选
+
+四条长训线 `agent_1500` 正式 seed2026、2 环境、2 回合、600 control steps 结果：9100 `all_time_max_y=1.544`、crossings `[2,1,1,0,0,0,0]`、fall `1.0`；9101 `1.440`、`[2,2,0,0,0,0,0]`、fall `1.0`；9102 `1.648`、`[1,1,0,0,0,0,0]`、fall `0`；9103 `1.373`、`[1,1,0,0,0,0,0]`、fall `0`。9101 相较 agent_1000 没有改善且持续跌倒，已停止释放 GPU；9100、9102、9103 保留到 agent_2500。四条当前平台率与停稳率均为 0。
+### 2026-08-13：slopecurr 保守长训 agent_2250/2500 正式筛选
+
+检查 T4 后确认 9100、9102 仍在训练，9101 已停止，9103 在 2500 节点后淘汰；自动化保持暂停。对当前项目自己的 checkpoint 从正式出生点评估，使用 `episodes=2`、`num_envs=2`、`max_control_steps=300`。9100 的 `agent_2500`（seed2026）达到 `all_time_max_y=1.752`、crossings `[1,1,1,1,0,0,0]`，但 `fall_rate=1.0`、`ever_on_platform_rate=0`、`stable_success_rate=0`。9102 的 `agent_2500`（seed2027）达到 `all_time_max_y=-0.401`、crossings `[2,2,1,1,0,0,0]`，平台率与停稳率均为 0；9103 的 `agent_2500`（seed2027）仅到 `all_time_max_y=-1.033`、crossings `[2,2,0,0,0,0,0]`，未完成回合且没有改善，已停止。9100/9102 暂保留观察后续关键节点，当前没有任何满足正式出生多 seed 交付门槛的 checkpoint。
+### 2026-08-13：往届对齐四线重新启动（进行中）
+
+停止 9100/9102 长训后，按 `docs/section1_reference_comparison.md` 的往届审查重新启动当前项目自己的四条单变量复现线：`ref_align_section011_repro`（seed9200，往届 reward/waypoint/PPO 对齐）、`ref_reward_section011_repro`（seed9201，仅 reward variant）、`ref_waypoint_section011_repro`（seed9202，仅 waypoint/command variant）和 `ref_hyper_section011_repro`（seed9203，仅 PPO 超参数 variant）。四线均从当前代码零初始化、正式环境配置、2048 environments、每 250 step 保存，未加载往届 checkpoint。首次评估曾因遗漏 `--env` 使用默认 62 维环境而出现 60/62 维 scaler 不匹配，已确认是评估命令错误而非训练错误；后续评估必须显式使用对应环境。`ref_align agent_1500` 在正确环境、正式 seed2026 快速评估中 `all_time_max_y=-1.931`、waypoint crossings 全 0、fall_rate 0、平台率/停稳率均 0，尚未形成前进证据，四线继续到下一个关键节点后再统一筛选。
+### 2026-08-13：当前 Section1 路线 + 往届 reward/control 兼容线（未通过首节点）
+
+为避免完整往届 9-waypoint 几何路线与当前坑洼地形不匹配，新增当前项目自己的 `vbot_locomotion_section011_reference_current_route_safe_dense_entry_wp5_routeobs_runnerup_reward`：保留 Section1 当前 route、62 维 route observation 和正式出生协议，仅迁移往届核心 reward/control（`tracking_linear=0`、`tracking_yaw=0.5`、`target_direction_velocity=2.0`、`progress=1.0`、`route_complete=1000`、`feet_air_time=1.0`、姿态/角速度/竖直速度惩罚、`action_scale=0.20`、`stiffness=80`、`damping=6`）。四条当前项目训练 seed9300–9303 均成功启动并保存 `agent_250`，但正式 seed2026 快速评估显示：9301 `max_y=-1.546`、crossings 全 0、fall 1.0；9303 `max_y=-1.459`、crossings `[1,0,0,0,0,0,0]`、fall 1.0；9300/9302 因 GPU 并发初始化失败未形成有效 JSON。四条均平台率与停稳率为 0，全部训练已停止，不接完整链。该实验说明单纯迁移往届 reward/control 不能解决当前 Section1 首段动态稳定性，checkpoint 仅保留为诊断证据。
+后续不再继续该兼容线；下一实验应在已有 `dense_entry_wp5`/`routeobs` 主线基础上只改变一个起步动态因素，并在 250/500/1000 节点用匹配环境评估，避免把评估器并发 CUDA 初始化失败误判为策略性能。
+
+### 2026-08-13：Section1 起步 waypoint 横向中心线单变量（已淘汰）
+
+在当前项目 `dense_entry_wp5_routeobs` 主线上，仅将正式起步至坑洼出口前的 waypoint 横坐标由 `x=0.6` 改为 `x=0.0`，保持 reward、观测、控制、课程和终点逻辑不变；训练 seed9400–9403，四 GPU 并行，首个 checkpoint 为 `agent_250`。串行正式 seed2026 评估 `agent_250`（9400）结果：`all_time_max_y=-1.554`、waypoint crossings `[0,0,0,0,0,0,0]`、`fall_rate=1.0`、`ever_on_platform_rate=0`、`stable_success_rate=0`。没有起步改善，四条线均停止，checkpoint 仅作为当前项目诊断证据。
+### 2026-08-13：slopecurr 初始策略方差单变量（已淘汰）
+
+在当前项目自己的 `vbot_locomotion_section011_reference_current_route_safe_dense_entry_wp5_routeobs_damping08_nogate_slopecurr` 上，仅将 PPO `initial_log_std` 从默认 `-1.0` 改为往届对齐的 `0.0`，环境、reward、route、控制和课程均不变；训练 seed9500–9503。9500 的 `agent_250` 正式 seed2026、2 环境、2 回合、300 control steps 达到 `all_time_max_y=1.283`、`fall_rate=0`、waypoint crossings 全 0；`agent_500` 达到 `all_time_max_y=1.319`、`fall_rate=0`、waypoint crossings 全 0。平台率和停稳率始终为 0，且没有形成第三 waypoint 或 `y>=1.0` 的可重复 crossing；其余训练线未显示更强证据，整组已停止。较大的初始探索方差改善了早期跌倒，但不足以完成 Section1 前段，checkpoint 仅保留为诊断证据。
+### 2026-08-13：正式出生评估协议修正与 9500 复核
+
+复查发现，`slopecurr` 训练配置含 `curriculum_spawn_probabilities=(0.70,0.15,0.15)`；此前 evaluator 在环境构造后未清除该字段，导致所谓“正式 seed”实际混入坑洼入口和过渡出生。已修正 `scripts/evaluate_section011.py` 与 `scripts/evaluate_section011_policy_chain.py`：构造环境后强制 `curriculum_spawn_probabilities=None`，权威评估只从 `x∈[-0.5,0.5], y∈[-2.9,-2.0]` 起跑。修正后的 `slopecurr_logstd0_9500/agent_500` 复评中，seed2027 `all_time_max_y=-2.103`、crossings 全 0、fall_rate 0；seed2029 `all_time_max_y=-2.096`、crossings 全 0、fall_rate 0；seed2026/2028 因与其他 JAX 进程并发初始化出现 CUDA stream abort，未形成有效 JSON。此前 9500 的 `max_y≈1.32` 属于混合课程诊断，不是正式出生证据；平台率和停稳率在严格协议下仍为 0。以后所有候选必须使用修正后的 evaluator 串行复核。
+### 2026-08-13：8910/agent250、agent500 严格正式出生复评（保留主线）
+
+使用修正后的 evaluator（关闭混合 curriculum）串行复评当前项目自己的 `wp5_slopecurr_lr1e5_8910`。`agent_250` 在正式 seed2026/2027/2028/2029 均无跌倒，waypoint crossings 分别为 `[2,2,2,0,0,0,0]`、`[2,2,1,1,0,0,0]`、`[2,1,1,1,0,0,0]`、`[2,2,2,2,0,0,0]`，最大 Y 分别为 `-0.804/0.133/-0.578/-0.175`。`agent_500` 的 seed2026 与 seed2029 仍保持 `[2,2,2,1,0,0,0]`、无跌倒，最大 Y `-0.421/-0.206`。四个 seed 均未进入 `y>=1.0`、平台率和停稳率仍为 0，但这是目前跨正式 seed 最稳定的前四 waypoint 证据。因此从当前项目自己的 `agent_500` 启动低学习率 continuation `slopecurr_from500_lr1e5_9600–9603`，不加入终点 gate 或 specialist，继续验证坑洼出口。
+
+`9600/agent250` 严格 seed2029 退化为最大 Y `-1.084`、crossings `[2,2,0,0,0,0,0]`，相较 `8910/agent500` 的前四 waypoint 明显退化；9600–9603 全部停止。原始 `8910/agent750` 严格 seed2029 仍为最大 Y `-0.702`、crossings `[2,2,1,0,0,0,0]`、fall_rate 0，继续作为当前项目权威前段基线，但尚未达到 `y>=1.0` 或任何平台/停稳成功。
+
+### 2026-08-13：8910/agent500 的 PPO epochs=1 continuation（已淘汰）
+
+从当前项目自己的 `8910/agent500` 启动 `slopecurr_from500_lr1e5_ep1_9700–9703`，唯一训练变量为 `learning_epochs=1`（保持 `learning_rate=1e-5`、环境和 reward 不变）。9700/agent500 严格 seed2029 为 `max_y=-0.399`、crossings `[2,2,2,2,0,0,0]`、fall_rate 0；9701/agent500 为 `max_y=-0.192`、同样前四 waypoint、fall_rate 0；9702/agent500 退化为 `max_y=-1.016`、crossings `[2,1,0,0,0,0,0]`；9703/agent500 有前四 waypoint但 `fall_rate=1.0`。继续到 agent750 后，9701/seed2029 退化到 `max_y=-1.204`、crossings `[2,0,0,0,0,0,0]`。因此 9700–9703 全部停止，保留 agent500 作为诊断证据；没有任何线进入 `y>=1.0`，平台率和停稳率均为 0。当前权威基线回退为 `8910/agent500`，其稳定前四 waypoint 仍未解决出口动态。
+### 2026-08-13：lateblend 动作尺度延迟单变量（已淘汰）
+
+在当前 `slopecurr` 主线上仅将 terrain action-scale blend 从默认区间延迟为 `(-0.4,0.2)`，训练 seed9800–9803。9800/agent250 严格正式 seed2029、500 control steps 结果为 `all_time_max_y=-1.707`、waypoint crossings 全 0、`fall_rate=1.0`；平台率与停稳率均为 0，明显劣于权威基线 `8910/agent500` 的前四 waypoint、无跌倒表现。四条 lateblend 线已停止，不接完整链；动作尺度延迟方向淘汰。
+### 2026-08-13：official-only 出生课程 continuation（未通过）
+
+从当前项目自己的 `8910/agent500` 启动 `slopecurr_official_only_9900–9903`，唯一变量为训练时关闭混合出生课程（`curriculum_spawn_probabilities=None`），保留当前路线、reward、观测、控制和 PPO。9900/agent250 严格 seed2029、500 steps 首次出现 `all_time_max_y=1.015`、crossings `[2,1,1,1,0,0,0]`，但 `fall_rate=1.0`、平台率/停稳率均为 0。后续 9900/agent500 长评估仍在 `y≈1` 附近跌倒，且没有平台事件；其余线未形成跨 seed 成功证据，所有 official-only 训练已停止。该方向说明正式出生分布匹配能把策略推到坑洼出口，但没有解决出口稳定性，不能接完整链或交付。
+### 2026-08-13：official-only 姿态惩罚加倍（已淘汰）
+
+从当前项目自己的 `official_only_9900/agent250` 启动 `slopecurr_official_orient2_9910–9913`，唯一变量为 `penalty_orientation: 1.0→2.0`，保持正式出生训练、路线、其他 reward、控制和 PPO 不变。9910/agent250 严格 seed2029、300 steps 结果为 `all_time_max_y=-0.409`、crossings `[2,1,1,1,0,0,0]`、`fall_rate=0`；相比 official-only 9900/agent250 在相同正式 seed、500 steps 达到 `y=1.015` 但跌倒，姿态惩罚加倍显著抑制了出口推进，未带来平台/停稳事件。9910–9913 全部停止，不接完整链；该 reward 变量淘汰。
+### 2026-08-13：official-only 中等姿态惩罚 1.25（已淘汰）
+
+从当前项目自己的 `official_only_9900/agent250` 启动 `slopecurr_official_orient125_9920–9923`，唯一变量为 `penalty_orientation=1.25`，保持正式出生训练、路线、其他 reward、控制和 PPO 不变。9920/agent250 严格 seed2029、300 steps 结果为 `all_time_max_y=-0.644`、crossings `[2,1,1,0,0,0,0]`、`fall_rate=0`；相比 official-only 9900/agent250 在 500 steps 达到 `y=1.015`，中等姿态惩罚仍抑制了出口推进，未带来平台或停稳事件。9920–9923 全部停止，不接完整链；该 reward 变量淘汰。当前不再继续无证据 reward 权重扫描，保留 `8910/agent500` 和 official-only 9900 checkpoint 作为诊断基线。
+### 2026-08-13：official-only agent250 低学习率保守 continuation（已淘汰）
+
+从当前项目自己的 `official_only_9900/agent250` 启动 `slopecurr_official_lr2e6_9930–9933`，唯一训练变量为 `learning_rate=2e-6`、`learning_epochs=1`，保持 official-only 出生、路线、reward、控制和观测不变。9930/agent250 严格 seed2029、500 steps 结果为 `all_time_max_y=-1.201`、crossings `[2,0,0,0,0,0,0]`、`fall_rate=0`，较 9900/agent250 的 `y≈1.015` 明显退化；四条 continuation 全部停止。低学习率不能保留已学出口行为，当前不再继续从 9900 续训。
+### 2026-08-13：rough corridor contact 基座 checkpoint 复核（已淘汰）
+
+复核当前项目自己的 `vbot_locomotion_section011_rough_corridor_contact/agent_2500`：匹配环境、正式 seed=2026、2 环境、4 回合、800 control steps，`all_time_max_y=-1.629`、waypoint crossings 全 0、`fall_rate=1.0`、`ever_on_platform_rate=0`、`stable_success_rate=0`。同一权重在 `vbot_locomotion_section011_full_route_contact` 正式出生环境最大 Y `-1.689`，仍无 waypoint、平台或停稳事件。该 rough 基座未形成可迁移越障步态，停止继续训练和导航接入；不录制视频、不推送 GitHub、不更新飞书交付文档。
+
+### 2026-08-13：rough contact → full-route 最小迁移（已淘汰）
+
+将当前项目自己的 `rough_corridor_contact/agent_2500` 作为唯一 warm-start 迁移到
+`vbot_locomotion_section011_full_route_contact`，不新增 specialist、不改变 reward 或 action scale；
+使用 `num_envs=2048`、`learning_rate=2e-6`、`learning_epochs=2`、`checkpoint_interval=250`，
+训练至 `agent_1500`。正式出生评估（每个 seed 2 环境、4 回合、800 control steps）为：
+
+| eval seed | all_time_max_y | waypoint crossings | fall_rate | ever_on_platform_rate | stable_success_rate |
+|---:|---:|---|---:|---:|---:|
+| 2026 | -1.651 | `[0,0,0,0,0,0,0]` | 1.0 | 0 | 0 |
+| 2027 | -1.781 | `[0,0,0,0,0,0,0]` | 1.0 | 0 | 0 |
+
+两种正式 seed 均在首个 waypoint 前跌倒，迁移训练没有恢复全路线 locomotion；该线已停止，
+checkpoint 仅作当前项目诊断证据，不接完整链、不录视频、不推送 GitHub、不更新飞书。
+
+### 2026-08-13：official-only 9900 高学习率续训复核（未通过）
+
+基于当前项目自己的 `official_only_9900/agent_250`（严格正式出生下曾到 `y=1.015` 但跌倒），
+仅将 continuation 学习率从此前的 `2e-6` 改回 `1e-5`，其余环境、奖励、观测、控制和 PPO 保持不变；
+使用 `learning_epochs=2`、`num_envs=2048`、`checkpoint_interval=250`，得到
+`official_from9900_lr1e5_10100/agent_500`。串行正式评估、每个 seed 2 环境、4 回合、600 control steps：
+
+| eval seed | all_time_max_y | mean_episode_max_y | waypoint crossings | fall_rate | ever_on_platform_rate | stable_success_rate |
+|---:|---:|---:|---|---:|---:|---:|
+| 2026 | -0.774 | -0.774 | `[3,2,1,0,0,0,0]` | 1.0 | 0 | 0 |
+| 2027 | 1.268 | 0.000 | `[2,2,2,1,0,0,0]` | 0.0 | 0 | 0 |
+
+高学习率 continuation 恢复了部分出口前进能力，但跨 seed 仍不稳定，且没有平台事件或 1 秒停稳；
+该线停止，不接完整链、不录视频、不推送 GitHub、不更新飞书。
+
+补充对其 `agent_500` 做完整链诊断：正式 seed=2027、2 环境、4 回合、1800 control steps，
+接入 `base → post-second → ramp400 → ramp600 → ramp-top → strict_hold100`，切换边界
+`1.0,2.25,4.0,6.0,6.9`。结果为 `all_time_max_y=-1.072`、`stage_entry_counts=[2,0,0,0,0,0]`、
+`fall_rate=0`、`ever_on_platform_rate=0`、`stable_success_rate=0`。因此前段的短评估极值没有转化为真实后段交接，
+不进入视频或交付候选。
+
+随后做同 checkpoint 的长窗口与交接边界诊断。单策略正式 seed=2027、2 环境、4 回合、1800 control steps
+达到 `all_time_max_y=1.285`、`mean_episode_max_y=0.632`、crossings `[4,4,4,3,0,0,0]`，但
+`fall_rate=1.0`，说明出口动作能到达 `y≈1.3` 却无法稳定保持。接入已有完整链并将第一切换边界分别设为
+`1.0` 和 `1.5`，后续边界固定为 `2.25,4.0,6.0,6.9`，两次 seed=2027 评估均为
+`all_time_max_y=-1.072`、`stage_entry_counts=[2,0,0,0,0,0]`、平台率和停稳率 0。
+因此当前瓶颈是正式前段动态稳定性与后段接管前的状态质量，继续扫描切换阈值没有证据价值；该 checkpoint 不接完整链。
+
+### 2026-08-13：official-only agent500→agent500 继续训练（已淘汰）
+
+沿用同一 `official-only + routeobs + damping08 + nogate` 环境和奖励，仅从当前项目自己的
+`official_from9900_lr1e5_10100/agent_500` 继续 `learning_rate=1e-5`、`learning_epochs=2`，
+得到 `official_from10100_lr1e5_10150/agent_500`。正式 seed=2027、2 环境、4 回合、600 control steps：
+`all_time_max_y=-0.623`、`mean_episode_max_y=0.000`、crossings `[2,2,2,0,0,0,0]`、
+`fall_rate=0`、`ever_on_platform_rate=0`、`stable_success_rate=0`。相较前一节点的第四 waypoint/出口能力明显退化，
+停止该 continuation，不接完整链、不录视频、不推送 GitHub、不更新飞书。
+
+### 2026-08-13：动作目标滤波消融（暂停，未完成评估）
+
+为区分“命令平滑”和“关节目标突变”，新增当前项目配置
+`vbot_locomotion_section011_reference_current_route_safe_dense_entry_wp5_routeobs_damping08_nogate_slopecurr_official_only_actionfilter09`，
+唯一变量为 `action_filter_alpha=0.90`；从当前项目自己的 `official_only_9900/agent_250` warm-start，
+使用 `learning_rate=2e-6`、`learning_epochs=2`、`num_envs=2048`、`checkpoint_interval=250`，
+成功保存 `actionfilter09_from9900_10200/agent_250.pickle`。随后按人工暂停决定停止，不再启动评估或续训；该 checkpoint 目前只有“训练完成、尚未正式评估”的状态，不能作为成功或失败证据。
+## 2026-08-14：正式出生平地直行小目标
+
+人工视频复核发现原策略在起跑平地阶段机头斜向行走。代码审查确认主要原因是正式出生 `x∈[-0.5,0.5]`，而旧 route 第一个目标固定为 `x=0.6`，命令控制器会主动横移对准坑洼走廊。新增独立环境 `vbot_locomotion_section011_flat_approach_straight`：保留每个环境的出生 X，固定世界航向为 `+Y`，到达 `y=-1.55` 时还需满足航向误差不超过 15°、相对出生横向漂移不超过 0.20 m。新增奖励只为沿 `+Y` 前进且朝向正确的速度发奖，并惩罚航向误差、横向速度和横向漂移，避免原地站立刷朝向分。
+
+使用当前项目 `slopecurr_official_only_9900/agent_250` 在原短终点配置下零训练评估，正式 seed2026--2029 每 seed 128 回合均显示 100% 成功、0% 跌倒；平均航向误差约 2.4°--2.7°，平均横向漂移约 2.2--2.4 cm。后续连续模拟证明，这组数据只能说明到达 `y=-1.55` 前的直行能力，不能证明已经进入并通过坑洼入口。
+
+随后从该 checkpoint 以 `lr=1e-6`、PPO epochs=2、重置 optimizer、2048 environments 做两条 500-step 短训。原短终点配置下最佳为 `flat_straight_s11100/agent_250`：四个正式评估 seed 合计 512/512 触发 `y=-1.55` 成功门、0 跌倒，平均航向误差 2.47°、平均横向漂移 1.97 cm。继续到 agent500 后航向和漂移退化；另一训练 seed 的 agent500 虽平均误差更低，但出现 1/512 跌倒。
+
+人工复核 1.9 秒视频后发现机器人尚未真正进入起伏区，且已有失稳趋势。为排除成功门提前 reset 的影响，新增 `vbot_locomotion_section011_flat_approach_straight_diagnostic`，关闭 `terminate_on_skill_goal`，从同一正式出生点连续运行最长 6 秒。`flat_straight_s11100/agent_250` 在 seed2026 下的连续结果为：`all_time_max_y=-1.4055`，2.92 秒后跌倒，`fall_rate=1.0`，平均航向误差 9.68°、最大航向误差 30.66°、最大横向漂移 0.1916 m，跌倒时 base clearance 0.1854 m。连续 3.5 秒诊断视频为 `artifacts/progress/flat_straight_enter_rough_diagnostic_seed2026.webm`。
+
+结论修正：原 `y=-1.55` 成功门位于坑洼前缘，造成 512/512 的虚假乐观结果；“直行小目标已冻结/第一段完成”的结论撤回。当前 checkpoint 只证明平地到坑洼前缘的朝向得到改善，尚不能稳定进入真实起伏区。第一段重新标记为未通过，后续验收必须连续越过坑洼入口并在未提前 reset 的情况下检查跌倒和航向稳定性。
+
+## 2026-08-14：平地到完整坑洼出口小目标（未通过）
+
+碰撞模型确认 Section011 高度场真实范围为 `x∈[-5,5], y∈[-1.5,1.5]`。新增
+`vbot_locomotion_section011_flat_to_rough_pass`，正式出生保持
+`x∈[-0.5,0.5], y∈[-2.9,-2.0]`，固定世界 `+Y` 命令，并将健康成功门放在后续平地
+`y=1.65`。成功时要求 upright cosine `>=0.70`、base clearance `>=0.25m`、横滚/俯仰角速度
+`<=2.5rad/s`，不要求额外停稳时间。训练课程为 70% 正式出生、30% 高度场入口出生；坑洼内设置
+`-1.5/-1.0/-0.5/0/0.5/1.0/1.65` 稠密里程碑，但命令仍为直行，不由 waypoint 横向转向。
+
+先严格复核旧 `slopecurr_footclear` seed9020--9022。扩大到 8 个正式环境、1200 control steps 后，
+三者最大 Y 分别为 `0.843/0.230/-0.266`，已完成回合全部跌倒；旧的两环境短评估
+`y≈1.59--1.72` 属于小样本偶然证据，不再作为候选。
+
+动作尺度零训练对照显示，直行 checkpoint 在坑洼段使用 `0.17` 时跌倒率约 18.8%、最大 Y `0.755`；
+使用旧的 `0.20` 时跌倒率约 41.2%、最大 Y `1.128`。因此训练使用折中值 `0.18`，并参考往届
+Section011 奖励补齐此前遗漏的差异：`penalty_base_height=0`、`penalty_action_rate=0.0015`、
+`penalty_joint_velocity=1e-4`、关闭额外 stall/feet-overstay 惩罚，保留 `feet_air_time=1.0`，加入
+`reward_foot_clearance=0.35`。坑洼范围内将直线朝向/横漂 shaping 降至 20%，允许必要的恢复步。
+
+首轮 `flat_to_rough_lr1e6_s11200` 与 `lr2e6_s11201` 的 agent250 在正式 seed2026 均 0 成功、
+100% 跌倒，最大 Y `1.208/0.657`。往届奖励偏差修正后的 `runnerupfix_s11210` 最大 Y 达到
+`1.610`、跌倒率 60%，但没有越过 `y=1.65`；第二 seed11211 最大 Y `0.963`。保留 optimizer 的
+continuation seed11212 退化到 `y=-0.685`，立即停止。仅在评估时覆盖 action scale=0.18 曾出现一次
+`1/9` 健康成功，但后续发现评估器和 PPO 在环境创建之后才调用 `set_seed`，同 seed 重跑无法复现，
+该偶发成功已撤回。
+
+已将训练、play 和正式 evaluator 的 `set_seed` 移到环境构造之前；同一 seed 连续两次短评估的最大 Y、
+waypoint 和 reward 完全一致。修正协议后，确定性单环境 seed2000--2015 全部 0 成功。重新训练的
+`flat_to_rough_seedfix_s11300/11301 agent250` 在正式 seed2026 均为 0% 成功、100% 跌倒，最大 Y
+分别为 `0.068/0.157`。因此当前小目标仍未通过，不录制成功视频，也不继续 reward/学习率微调。
+
+下一步不再把导航 checkpoint 直接硬调成盲走坑洼策略。往届能通过的关键不只是一组权重，还包括在
+Section011 多个粗糙地形出生点进行广覆盖 locomotion curriculum。后续应保持平地直行策略不动，建立
+一个覆盖完整 `y∈[-1.5,1.5]` 的单一坑洼 locomotion 预训练段，再将其 warm-start 回同一个
+flat-to-rough 环境验证；这属于“三大段”中的完整坑洼段，不再拆成多个厘米级 handoff specialist。
+
+## 2026-08-14：完整坑洼 locomotion 预训练与横向命令课程
+
+新增 `vbot_locomotion_section011_rough_full_pretrain`：50% 回合从坑洼入口出生，50% 在完整
+`y∈[-1.45,1.35]` 高度场随机出生；保持 60 维观测、`action_scale=0.20`、`stiffness=80`、
+`damping=6`，使用往届风格的持续 locomotion reward，不设置厘米级终点 gate。四条首轮训练中，只有
+由当前直行策略 warm-start 的分支形成有效前进；旧 `rough133` warm-start 为 100% 跌倒，两条从零
+训练均学成站立超时。`rough_full_from_flat_s11400/agent_1000` 在局部完整坑洼 seed2026--2029 的最大
+Y 为 `1.356/0.989/1.672/1.036`，其中 seed2028 首次得到确定性 `1/9` 健康通过。
+
+随后仅将 `reward_target_direction_velocity` 从 2 提至 4，使用 `lr=2e-6` 做 500-step continuation。
+当前最佳为 `rough_full_vel4_s11411/agent_250`：局部 seed2027 为 `1/14=7.14%` 健康通过、最大
+Y `1.659`；seed2028 为 `1/8=12.5%`、最大 Y `1.704`。这证明同一坑洼 locomotion policy 已能在多个
+确定性 seed 偶发健康穿越完整高度场，但成功率仍低。原世界坐标走廊回接 seed11500--11503 全部正式
+0 成功，最佳最大 Y 仅 `-0.172`，已停止；原因是策略只学过固定向前命令，直接加入较大的横向回接命令
+造成停滞和偏航。
+
+代码复核还发现同名 reward 语义差异：往届 `tracking_yaw=0.5` 计算
+`exp(-abs(target_yaw-base_yaw))`，奖励绝对机头朝向；当前实现原先计算命令 yaw-rate 与陀螺仪误差，只能
+奖励“不转动”，不能保证朝向 +Y。现已新增可选的往届 heading 语义，并建立四条完整坑洼横向命令课程：
+`lateral00/04/08/12`，分别使用 body-frame `vy=0/±0.04/±0.08/±0.12 m/s`。所有线均扩大训练出生
+X 至正式范围 `[-0.5,0.5]`，保持 vel4 主 reward，只增加较小的 `reward_tracking_linear=0.25` 以让策略
+实际响应 lateral command。四线均从本项目自己的 `rough_full_vel4_s11411/agent_250` warm-start，
+`num_envs=2048`、`lr=2e-6`、`epochs=2`、每 250 step 保存，seed11600--11603。旧 checkpoint 在新
+wide-X 测试的零训练 smoke 中 250 steps 仅到 `y=-0.710`；正式平地测试最大 `y=-1.102` 且已有跌倒，
+进一步确认原成功主要局限在 `x≈0.6` 窄通道。本轮应优先比较 250/500 checkpoint 的完整坑洼多 seed
+健康通过率，退化线及时停止，再将最佳候选放回正式平地起点评估。
+
+四线在 500 step 前停止并筛选。wide-X 完整坑洼 seed2026 中，`lateral00/agent250` 为
+`skill_success_rate=11.11%`、最大 Y `1.663`、跌倒率 `16.67%`；`lateral08/agent500` 为
+`5.56%`、最大 Y `1.672`、跌倒率 `38.89%`。但两者在 seed2027--2029 的健康通过率均为 0；前者
+最大 Y 为 `0.878/0.224/-0.084`，后者为 `0.496/1.318/0.904`。放回正式平地 seed2026 后，二者
+最大 Y 分别只有 `0.078/0.534`，健康通过率均为 0。结论是扩大 X 与修正 heading reward 能产生局部
+改善，但仍未学会“平地连续行走后进入坑洼”的动态过渡，横向命令也不是当前第一瓶颈。
+
+因此新增无硬终点的正式平地+完整坑洼混合 locomotion 课程：正式出生与完整高度场随机出生比例分别
+测试 50/50 和 70/30，横向命令仅比较 0 与 `±0.04m/s`。四条 seed11700--11703 仍保持 60 维观测、
+vel4 reward、绝对 heading reward、`action_scale=0.20`、`stiffness=80`、`damping=6`，训练 500 step，
+每 250 step 保存。lateral00 两线从 `lateral00/agent250` warm-start，lateral04 两线从
+`lateral08/agent500` warm-start。该课程直接针对正式平地积累步态状态后进入高度场即失稳的问题，
+不通过提前 reset、局部 handoff 或新 specialist 掩盖失败。
+
+首轮正式 seed2026 评估显示，50/50 两线均未改善；70/30 更有希望。`mix70_lateral00/agent250`
+达到最大 Y `1.232`，有 2 条轨迹越过 y=1.0 waypoint，但健康通过率仍为 0、跌倒率 55.56%。
+`mix70_lateral04/agent500` 首次从正式出生得到 `skill_success_rate=6.25%`、最大 Y `1.653`，但
+跌倒率 93.75%。同 checkpoint 在 seed2027/2028/2029 的最大 Y 为 `0.618/0.415/-0.630`，健康通过率
+全部为 0；因此只记录为第一条正式起跑的脆弱成功证据，尚不能宣布小目标完成或录制成功视频。
+
+鉴于环境与 reward 首次产生真实正式通过，固定 `mix70_lateral04` 配置再运行四个独立训练 seed
+11710--11713，仍从 `lateral08/agent500` warm-start、训练 500 step。该批只检验训练随机性与可复现性，
+不再修改环境、奖励或超参数；若仍无跨评估 seed 的健康通过，将停止该路线而不是继续堆训练步数。
+
+四个复现训练 seed 的 agent250 在正式 seed2026 最大 Y 仅 `0.226/0.064/0.350/0.167`，全部 0 成功；
+agent500 为 `0.728/0.226/1.622/0.799`，仍全部 0 成功。因此 seed11703 的正式通过没有被独立训练
+seed 复现，固定配置继续堆步数缺乏证据。对原 seed11703/agent500 做零训练 terrain action-scale 扫描：
+0.17 最大 Y `-0.573`、0 成功；0.18 为 `skill_success_rate=4.35%`、最大 Y `1.650`、跌倒率 60.87%；
+0.19 最大 Y `0.362`、0 成功。0.18 能缓解跌倒并保留 seed2026 的脆弱通过，但 seed2027 最大 Y
+仅 `0.060`、0 成功，仍不是跨 seed 方案。
+
+最后按往届奖励做单变量消融：当前项目额外的 `reward_foot_clearance=0.35` 不属于往届 Section011 核心
+reward，可能诱导坑洼中过高抬腿。新增 `mix70_lateral04_noclear`，从 seed11703/agent500 使用
+`lr=1e-6` 保守续训 250 step，四个训练 seed11800--11803，并以 terrain action scale=0.18 正式评估。
+最大 Y 分别为 `1.013/1.137/1.165/0.283`，全部 0 健康通过；跌倒率分别为
+`100%/56.25%/70%/52.94%`。移除 foot-clearance bonus 没有解决出口通过，方向淘汰。
+
+截至本轮结束，最强但不具可复现性的阶段证据仍是本项目 `mix70_lateral04_s11703/agent500`：正式
+seed2026 在默认 action scale 0.20 下 `6.25%` 健康通过，scale 0.18 下 `4.35%`；seed2027--2029
+均为 0。故“正常通过坑洼”小目标仍未完成，不录制成功视频。下一步应停止同配置 seed/步数扩展，回到
+往届实现继续核对尚未迁移的状态初始化、command resampling、reward 数值定义和 PPO normalization 行为，
+再选择一个最小结构差异验证。
+
+补充命令语义诊断：当前 `navigation_body_forward_speed=0.4` 会让平移命令始终沿机器人当前机头方向，
+因此机头偏航后前进方向也随之偏斜；往届 waypoint controller 则把目标误差转到机体坐标系，能通过横向
+命令纠偏。新增只读测试 `flat_to_rough_world_y_test`，保持目标 X 等于出生 X，将速度固定为世界 +Y，
+使偏航时的 policy command 自动出现 body-frame lateral 分量。用 seed11703/agent500、terrain scale=0.18
+零训练评估 seed2026--2029，平均 heading error 降至约 `10.9°--18.9°`，但四个 seed 全部 100% 跌倒，
+最大 Y 为 `-0.489/-0.351/-0.920/-0.536`。这说明现有 policy 不能零样本切换命令语义；若继续，应把
+world-fixed/waypoint-error 命令作为训练中的渐进单变量适配，而不能只在 play/evaluation 时替换。
+
+## 2026-08-15：已通过同学方案的 terrain-residual 迁移
+
+补充审查两份已通过作业后，停止继续扩展 handoff specialist，新增独立的
+`vbot_locomotion_section011_terrain_residual_*` 环境族。实现采用 78 维观测、24 点地形扫描、四拍参考步态和
+有界 PPO 残差；所有 checkpoint 都从本项目重新训练，不加载同学权重。为适配正式随机出生，参考控制和最后一维
+观测使用 `root_x - episode_start_x`，而不是同学代码中的绝对世界 X；同时保持每个回合的目标 X 为出生 X，
+避免机器人为了回到中心线而斜走。
+
+第一批正式随机出生训练累计约 3000 batched steps：seed12100 的 `agent_1000` warm-start 后，四个独立
+continuation seed12200--12203 使用 2048 environments、`lr=5e-5`、重置 optimizer，各训练 2000 step，
+每 500 step 保存。16 个 checkpoint 均以 64 回合、seed2026、正式出生严格评估。只有三个 `agent_2000`
+各出现 1/64（1.56%）严格成功；对应跌倒率为 10.9%、12.5%、14.1%，其余主要为站立超时。
+seed12203/agent2000 的 5 次 raw crossing 平均航向误差为 9.2°，说明固定朝向纠偏已改善；但仅 5/64 越过
+`y=-1.45`，不能认定平地小目标完成，也不能进入坑洼 S2。
+
+同学复现命令显示其 S1 并非正式随机出生训练，而是固定 `x=0,y=-2.4`、无朝向噪声、到 `y=-1.75` 的 6 秒
+课程，并训练到 `agent_9600`。当前项目据此新增
+`vbot_locomotion_section011_terrain_residual_s1_fixed`，只复现训练课程，不复制权重。下一步先在该环境训练出
+可靠基础步态，再逐步随机化出生 X/Y 并用现有严格 `terrain_residual_flat` 从正式出生复核；正式随机出生成功率
+没有稳定提高前，不启动 rough 或 full 训练。
+
+固定 S1 四个 seed 训练至 `agent_9000` 后，早期 checkpoint 多数能在固定工况 128/128 通过，但后期逐渐
+退化为零摔倒、原地超时；例如 seed12302/agent1000 平均 2.27 秒完成，而各线 agent8000/9000 均为
+0% 成功。选择四个早期候选放回正式随机出生、seed2026--2029 共 256 回合以上复核：动作性最强的
+seed12302/agent1000 仅 `1/292` 严格成功、摔倒率 60.3%；较稳的 seed12303/agent2000 为 `1/256`、
+摔倒率 11.7%。固定起点训练证明了结构能学会基础步态，但没有提供正式出生鲁棒性。
+
+为避免从固定无扰动直接跳到 `y=-1.45` 的严格稳定门，新增中间课程
+`vbot_locomotion_section011_terrain_residual_s1_random`：使用正式随机 X/Y 和 ±5° 初始 yaw，在坑洼前
+`y=-1.75` 要求 heading error `<=15°`、相对出生横漂 `<=0.20m`，但不要求额外停稳或角速度门。
+该课程只负责扰动恢复和直行；通过后仍必须回到现有 `terrain_residual_flat` 严格入口环境复核。
+
+随机课程 seed12400--12403 的 checkpoint sweep 表明课程有效但同样存在后期站立退化：最佳
+seed12403/agent1000、agent1500 与 seed12402/agent500 均为 100% 成功、0 摔倒。把四个候选放回
+`y=-1.45` 严格入口、seed2026--2029 复核后仍为 0 严格成功；raw crossing 合计分别约 10--78 次。
+跨越状态的 base clearance 中位数约 `0.23m`，而实际地形高度在 `y=-1.45`、正式 X 范围内的中位数仅
+约 `0.045m`，因此低 clearance 不是坐标/高度场统计误差，而是真实的底盘下沉。
+
+严格入口门继续保留 clearance `>=0.30m`、angular XY `<=1.5rad/s`，不通过放宽标准制造阶段成功。
+训练 reward 使用环境已有的 `exit_healthy_forward` 结构，在 `y∈[-1.55,-1.30]` 只对同时满足直立、
+离地和角速度健康的向前速度发奖（权重 4），并给稳定候选每步权重 2；随后从两个最佳随机 S1 checkpoint
+做严格门微调。该修改直接针对已测得的下沉状态，不改变最终评估条件。
+
+四条严格入口微调 seed12500--12503 训练 3000 step 后，以正式出生 seed2026--2029 统一复核。
+seed12500/agent3000 合计 `13/320` 严格成功（4.1%）、跌倒率 6.9%；seed12503/agent3000 为
+`9/320`（2.8%）、跌倒率 4.4%。两者在每个评估 seed 上都出现了非零严格成功，这是本项目首次获得
+正式随机出生、跨评估 seed 的健康入口证据，但通过率仍不足以把它视为最终能力。
+
+从上述两点各做保留/重置 optimizer 的保守 continuation，并在 agent1000 停止，避免再次出现后期站立退化。
+seed12601（从 seed12500、`lr=1e-5`、重置 optimizer）在正式 seed2026--2029 的严格成功分别为
+`13/129、4/128、10/128、10/128`，合计 `37/513=7.2%`，综合跌倒率约 9.9%；seed12600 合计
+`26/513=5.1%`，综合跌倒率约 9.6%。因此冻结 seed12601/agent1000 为当前平地入口主候选，seed12600
+作为第二初始化样本。
+
+同时修正课程解释：同学 S1 在 `y=-1.75`、尚未进入坑洼时结束，S2 才开始插值低速、抬腿的 rough gait；
+当前 `terrain_residual_flat` 压力测试却要求 flat gait 到达 `y=-1.45`，即深入坑洼约 0.3 m。该测试仍用于
+检查入口健康，但不再作为启动 S2 的高成功率硬门槛。随后启动 S2 的 2x2 对照 seed12700--12703：使用
+1024 environments、40% 正式出生 + 60% 坑洼局部出生、统一重置 optimizer，只比较
+`seed12600/12601` 两种初始化与 `1e-4/5e-5` 两个学习率。最终 rough 候选仍必须在关闭局部 curriculum 后，
+从正式出生用 `terrain_residual_rough_test` 多 seed 验证到达 `y>=1.65`，不能用局部训练成功率替代。
+
+首批 mixed S2 seed12700--12703 训练到 4000 step（seed12700 在 agent1000 停止）。正式 seed2026
+粗筛中所有 checkpoint 的 rough success 均为 0；最好的是 seed12701/agent3000，waypoint crossings
+`[20,3,0,0,0,0,0]`、最大 Y `-0.702`。同线 agent4000 仍只跨第二门，seed12702 则从 agent1000
+最大 Y `-0.605` 退化到 agent4000 的 `-1.278`。继续同一 mixed 配置没有第三门证据，停止。
+
+随后重新逐行核对同学 S2 reset，发现上述课程仍有两项关键不对齐：同学 S2 从完整起点运行，单回合
+`42s`；当前 mixed S2 却有 60% 坑洼局部 reset 且只有 `18s`。新增最小配置
+`terrain_residual_rough_official(_test)`，保留同一 78 维观测、rough gait 和 reward，只改为 100% 正式
+随机出生、4200 control steps。旧 mixed 配置继续保留用于复现实验，不覆盖历史结果。
+
+official S2 的 2x2 训练 seed12800--12803 使用两个入口 checkpoint 与 `1e-4/5e-5` 学习率。正式
+seed2026、32 回合筛选中，seed12802（从 seed12601、`lr=1e-4`）agent3000 首次跨前四门，最大 Y
+`0.072`；agent4000 进一步达到 `0.318`，crossings `[16,4,2,1,0,0,0]`。agent6000/8000
+退化为 `[20,2,1,0,0,0,0]` 与 `[11,4,2,0,0,0,0]`，因此冻结 agent4000，而不是末期模型。
+
+agent4000 在正式 seed2027--2029 的 crossings 分别为 `[9,0,0,0,0,0,0]`、
+`[9,3,2,0,0,0,0]`、`[10,1,1,1,0,0,0]`，最大 Y `-1.055/-0.206/0.051`；说明 official
+课程的前四门改善能在多个 seed 出现，但仍未到第五门或 rough 终点。checkpoint 审查显示策略平均
+log-std 从 agent3000 的 `-0.538` 持续降到 agent8000 的 `-0.719`，与后期探索和运动性下降一致。
+因此从 seed12802/agent4000 启动 seed12900--12903，统一重置 optimizer，比较
+`lr=2e-5/5e-5` 与 resume log-std `-0.25/-0.50/-0.75`，只续训 4000 step；仍以正式多 seed
+waypoint、rough success 和跌倒率选点。
+
+## 2026-08-15：固定条件 Torch 保底线
+
+人工复核视频后，原 JAX terrain-residual 路线虽然能在平地和坑洼前四个门产生局部改善，但没有形成
+可重复的完整坑洼通过。seed12900--12903 均已完成 4000-step continuation；在开始其 agent4000
+正式粗筛后，决定停止该评估并释放四张 GPU。旧权重和日志只保留为失败证据，不再续训。
+
+新路线优先复现第二份已通过作业的可验证固定条件：采用其 78 维观测、24 点地形扫描、
+`FR -> RL -> FL -> RR` 四拍参考步态、Torch PPO residual、固定 `x=0, y=-2.4, yaw=+Y`，以及
+`S1 9600 -> S2 16000 -> S3a 16000 -> full 6400` 的 warm-start 顺序。同学的 `.pt` checkpoint、
+视频和最终策略仍只用于只读诊断，四阶段权重全部从本项目随机初始化重新训练。
+
+训练 PPO 固定为共享 policy/value 的 `512-256-128` 网络、`learning_rate=3e-4`、`rollouts=24`、
+`learning_epochs=5`、`mini_batches=8`、1024 个并行环境。新增
+`scripts/train_section01_course_torch.py` 明确把阶段步数换算成 `num_envs * stage_steps` 环境 transition，
+并兼容官方旧版 Torch Trainer；新增 `scripts/evaluate_section01_course_torch.py` 以确定性 mean action
+输出阶段成功率、最大 Y、平均回合最大 Y、跌倒率和超时率。
+
+当前 S1 从零训练四条独立 seed 42--45，命令等价于：
+
+```bash
+python scripts/train_section01_course_torch.py \
+  --env=vbot-section01-s1-velocity-course \
+  --num-envs=1024 --stage-steps=9600 --checkpoint-interval=800 \
+  --seed=<42..45> --run-tag=s1_fixed_seed<seed>
+```
+
+固定 full 跑通后，不直接跳回全部正式扰动。难度按单变量顺序增加：随机 X、随机 Y、初始 yaw 扰动、
+平台连续停稳 1 秒。每一级只从上一级自己的最佳 checkpoint warm-start，并保留前后固定种子评估；只有
+当前一级通过后才开启下一级。
+
+S1 四条均完成到 `agent_9600.pt`，固定起点确定性评估各 32 回合，结果全部为 `32/32` 成功、
+`fall_rate=0`、`timeout_rate=0`。到达 `y=-1.75` 的控制步分别为 seed42 `267`、seed43 `218`、
+seed44 `256`、seed45 `288`；四条都是本项目从零训练的独立权重。随后四条各自从自己的 S1
+`agent_9600.pt` warm-start 进入固定 S2，保持相同 seed，训练 16000 步、每 800 步保存，避免只用
+单一训练 seed 掩盖课程不稳定性。
+
+四条 S2 均按既定长度完成到 `agent_16000.pt`，固定 `x=0,y=-2.4,yaw=+Y`、确定性动作、每条
+32 回合的末点验收如下：
+
+| S2 训练线 | 成功 | 跌倒率 | mean/max episode Y | 结论 |
+|---|---:|---:|---:|---|
+| seed42 | 0/32 | 100% | 0.2941 | 淘汰 |
+| seed43 | 0/32 | 100% | 1.7038 | 接近终点但在 `y=1.75` 前跌倒 |
+| seed44 | 32/32 | 0% | 1.7513 | 通过，作为 S3a warm start |
+| seed45 | 0/32 | 100% | -0.5287 | 淘汰 |
+
+固定 S2 因而已经获得可重复的完整坑洼通过证据，但同时证明课程对训练 seed 敏感，不能只报告单线
+训练 reward。S3a 使用 seed44 的本项目 `agent_16000.pt` 初始化四条独立 seed42--45，继续执行同学
+方案规定的 16000 步训练长度。
+
+为消除对只读参考沙箱的交付依赖，已将课程环境以独立
+`motrix_envs.navigation.vbot.section01_course` 包接入当前仓库。旧 Section011 文件和同名 XML 不被
+覆盖；课程专用 XML 使用 `course_*`/`vbot_course.xml` 前缀。大体积官方 arena assets 和 meshes
+仍沿用仓库既有 `.gitignore` 与本机资产准备方式，不纳入 Git。T4 上从当前项目 PYTHONPATH 创建环境的
+冒烟结果为 78 维观测、12 维动作、出生点 `[0,-2.4,0.462]`。迁移内容仅包含环境结构和配置，未复制
+同学 checkpoint、视频或最终策略。
+
+S3a 四条均从通过 S2 的 seed44/agent16000 warm start，并完成规定的 16000 步。当前项目代码路径下的
+固定坡段末点验收为：
+
+| S3a 训练线 | 成功 | 跌倒率 | mean/max episode Y | 控制步 | 结论 |
+|---|---:|---:|---:|---:|---|
+| seed42 | 32/32 | 0% | 6.8003 | 4254 | 通过 |
+| seed43 | 32/32 | 0% | 6.8025 | 4014 | 通过 |
+| seed44 | 0/32 | 100% | 1.8728 | 411 | 淘汰 |
+| seed45 | 0/32 | 100% | 2.0859 | 497 | 淘汰 |
+
+full 阶段采用 2x2 初始化：训练 seed42/43 从 S3a seed42 初始化，训练 seed44/45 从 S3a seed43
+初始化；四条均执行同学方案的 6400 步、每 400 步保存。full 环境在 1024 并行训练时保留同学实现的
+三类固定课程起点（正式起点、坑洼内部、坡前），但单环境评估固定从 `x=0,y=-2.4,yaw=+Y` 出发，
+局部课程回合不计入最终成功证据。
+
+四条 full 的 `agent_6400` 均在单环境正式起点失败，因此按每 400 步扫描 64 个历史 checkpoint。
+单回合粗筛找到 7 个到达 `y>=7.8` 的候选；每个候选再做 5 次连续重放后，只有以下三点可重复：
+
+| fixed full checkpoint | 成功 | 跌倒率 | mean episode max Y | 5 回合总控制步 |
+|---|---:|---:|---:|---:|
+| seed43/agent6000 | 5/5 | 0% | 7.8015 | 33624 |
+| seed45/agent3600 | 5/5 | 0% | 7.8009 | 32391 |
+| seed45/agent4400 | 5/5 | 0% | 7.8006 | 34393 |
+
+其余四个粗筛成功点仅为 1/5，不能作为基线。选择平均到达最快的 seed45/agent3600 进入 random-X。
+这证明 fixed 条件已完整跑通，也再次验证 full 存在明显的中间 checkpoint 优于训练末点现象。
+
+另做评估协议校验：同一 seed45/agent3600 在 `num_envs=1` 为 5/5，通过，而 `num_envs=2` 即使关闭
+局部课程起点也在 `y=1.11` 处 2/2 跌倒。MotrixSim 批量规模会改变数值轨迹，因此正式与随机鲁棒性
+验收固定使用 `num_envs=1`；需要覆盖多起点时运行多个独立单环境进程，不能用批量环境替代。
+
+random-X 从 fixed seed45/agent3600 warm start 四条 seed52--55，唯一环境变化为正式起点
+`x∈[-0.5,0.5]`；Y、yaw 和终点判定不变。四条均训练 6400 步。末点在 eval seed2026--2029
+分别只有 `1/4、1/4、1/4、2/4` 成功，不能晋级 random-Y。
+
+随后以 eval seed2026/2028 扫描 64 个历史 checkpoint，得到 4 个 2/2 粗筛候选；扩大到
+eval seed2026--2041、每候选 16 条独立 `num_envs=1` 轨迹后：
+
+| random-X checkpoint | success | ever on platform | fall | mean max Y |
+|---|---:|---:|---:|---:|
+| train52/agent2800 | 3/16 | 3/16 | 13/16 | 2.334 |
+| train52/agent3600 | 4/16 | 5/16 | 12/16 | 2.843 |
+| train53/agent5600 | 4/16 | 4/16 | 12/16 | 2.703 |
+| train54/agent1600 | 3/16 | 3/16 | 13/16 | 2.330 |
+
+实际样本同时覆盖负 X 和正 X；最佳 checkpoint 也能分别通过两侧样本，失败不是单纯的左右偏置，而是
+完整路线策略仍有明显相位/数值敏感性。random-X 当前未通过，不增加随机 Y。
+
+从两个 4/16 最佳点启动 2x2 continuation：父点 train52/agent3600 与 train53/agent5600，分别使用
+`learning_rate=1e-4/5e-5`、重置 optimizer、训练 3200 步、每 400 步保存。训练入口新增显式
+`--learning-rate` 和 `--reset-optimizer`；后者保留 policy/value 与 observation/value normalizer，删除旧
+optimizer 状态，避免 checkpoint 内的 3e-4 学习率覆盖 continuation 设置。
+
+上述 v1 低学习率 continuation 的 32 个 checkpoint 在 eval2026/2028 粗筛中没有任何 2/2 候选，
+因此停止，未扩大训练。进一步审查参考控制器发现 `_joint_targets` 只按 heading error 修正转向，未使用
+观测中已有的 lateral X。为保留历史可复现性，不覆盖 v1 环境；新增独立 route-v2 环境族，在参考目标中
+加入 `correction += 0.06 * lateral_error`，其余观测、gait、reward、PPO 和 fixed 环境均不变。
+
+fixed seed45/agent3600 在未训练 route-v2 下为 4/16，与 v1 最佳相当。随后四条 route-v2 random-X
+seed72--75 各训练 6400 步；64 checkpoint 的 2-seed 扫描只得到 train73/agent4800 与
+train74/agent4800 两个 2/2 候选。16-seed 复核结果：
+
+| route-v2 random-X checkpoint | success | ever on platform | fall | mean max Y |
+|---|---:|---:|---:|---:|
+| train73/agent4800 | 3/16 | 3/16 | 13/16 | 1.989 |
+| train74/agent4800 | 6/16 | 6/16 | 10/16 | 3.828 |
+
+train74/agent4800 比 v1 上限 4/16 有实质提升，成功起点覆盖 `x=-0.325` 到 `x=+0.468`，说明修正方向
+有效，但 37.5% 仍不足以晋级 random-Y。以该点做最后一轮 3200-step optimizer/学习率对照：
+`3e-4/1e-4/5e-5` 分别重置 optimizer，另保留一条原 3e-4 optimizer 状态作为对照。若多 seed 结果
+不能至少过半，则冻结 random-X 为当前瓶颈，不继续增加随机 Y/yaw/停稳难度。
+
+最终 continuation 的 32 checkpoint 只有 `3e-4 + reset optimizer` 的 train82/agent3200 在
+eval2026/2028 达到 2/2；扩大到 16 seed 后退化为 `4/16`、平台率 `4/16`、跌倒 `12/16`、
+mean max Y `2.268`，低于其父点 train74/agent4800 的 `6/16`。因此停止所有 random-X 训练，冻结
+train74/agent4800 为当前 random-X 最佳，但明确标记“未通过”，不启动 random-Y、yaw 或 1 秒停稳训练。
+
+当前权威 checkpoint 已同步到本机：
+
+| 用途 | 本机文件 | SHA-256 | 结论 |
+|---|---|---|---|
+| fixed full | `artifacts/checkpoints/course_torch/fixed_full_seed45_agent3600.pt` | `ca82c076c7b5dce8127b24c8d51324016322560958e3d6ea8b918e2b942051ed` | 5/5，已通过 |
+| random-X best | `artifacts/checkpoints/course_torch/random_x_route_v2_train74_agent4800.pt` | `d40a5a6bf2da2d81d07824d8d2dd6c8891cbb820e4796056a4ac5f3e687d3310` | 6/16，未通过 |
+| random-X10 fixed-preserving | `artifacts/checkpoints/course_torch/random_x10_mix75_seed115_agent5800.pt` | `567a0c8eef19aae4cb1341d7b1b6903a833592f841085ceeec32f6cfc415cdfb` | fixed 5/5；X10 6/16，未通过 |
+
+最终代码回归再次从 `num_envs=1`、`x=0,y=-2.4,yaw=+Y` 运行 fixed checkpoint：6499 控制步到达
+`y=7.8018`，`success_rate=1`、`ever_on_platform_rate=1`、`fall_rate=0`。T4 无本项目训练或评估
+Python 进程，四张 GPU 已释放；random-X 未通过前不应继续增加后续难度。
+
+### random-X 失败机理与 phase-jitter v3
+
+对 route-v2 train74/agent4800 的 16 条随机 X 轨迹补充终止诊断：6 条成功，7 条翻倒，3 条底盘触地；
+失败中 6 条最大 Y 位于 `1.75--2.12` 的坑洼出口/坡脚，4 条在坑洼内部，没有 lateral 越界终止。
+`x=+0.174` 的样本在坑洼失败，而 `x=+0.178` 完整成功，4 mm 起点差异即可导致接触轨迹分叉，
+说明瓶颈是接触扰动恢复能力，而不是简单左右偏置。
+
+现有 full curriculum 的坑洼/坡前局部 reset 都从静止姿态和固定 gait phase 开始，无法覆盖机器人从前段
+动态到达时的相位与姿态分布。进一步固定 eval seed2026/start_x=-0.087，只改变参考 gait 初相位
+`0.0,0.5,...,3.5`：只有 phase0 完整成功，其余 7 个相位均在坑洼或坡脚翻倒/触底。这证明策略对 gait
+phase 严重过拟合。
+
+新增独立 phase-jitter v3 curriculum，不改变 78 维观测、动作、奖励、正式随机 X 或评估条件。只有
+`num_envs>1` 的训练环境在每回合随机参考 gait 初相位；`num_envs=1` 正式评估固定 phase0。四卡对照：
+
+| train seed | phase range | 其他条件 |
+|---:|---:|---|
+| 92 | `[-0.5,0.5]` | parent=train74/agent4800，6400 steps |
+| 93 | `[-1.0,1.0]` | 同上 |
+| 94 | `[-2.0,2.0]` | 同上 |
+| 95 | `[-2.0,2.0]` | full-range 独立 seed |
+
+四条均保留父 checkpoint optimizer，学习率和所有 PPO 参数一致，只比较 phase-jitter 范围与训练 seed。
+
+四条 phase-jitter v3 均完成 6400 步，每 400 步保存。先对全部 64 个 checkpoint 使用正式随机 X、
+`num_envs=1`、固定 phase0、eval seed2026/2028 粗筛，得到 4 个 2/2 候选；再使用相同的
+eval seed2026--2041 做 16 条独立单环境轨迹复核：
+
+| phase-jitter v3 checkpoint | phase 训练范围 | success / platform | fall | mean max Y |
+|---|---:|---:|---:|---:|
+| seed94/agent800 | `[-2.0,2.0]` | 5/16 | 11/16 | 3.134 |
+| seed92/agent400 | `[-0.5,0.5]` | 5/16 | 11/16 | 2.725 |
+| seed94/agent1600 | `[-2.0,2.0]` | 4/16 | 12/16 | 2.729 |
+| seed93/agent3200 | `[-1.0,1.0]` | 4/16 | 12/16 | 2.450 |
+
+四个候选都低于父 checkpoint train74/agent4800 的 `6/16`，phase-jitter v3 因而淘汰，不续训，
+也不用于 random-Y warm start。下一轮仍只增加随机 X 这一项难度，但把固定 `x=0` 到完整
+`[-0.5,0.5]` 的突变拆成 `[-0.1,0.1] -> [-0.25,0.25] -> [-0.5,0.5]`。每一级保持原始同学环境的
+观测、奖励、控制器、full 局部课程和 6400 步训练长度；只有当前范围多 seed 通过后才扩大范围。
+
+### 渐进 random-X：`[-0.1,0.1]`
+
+四条 seed102--105 从权威 fixed seed45/agent3600 初始化，不使用 route-v2 或 phase-jitter，唯一环境变化
+是起点 X 从 `0` 改为 `[-0.1,0.1]`。四条均训练 6400 步、每 400 步保存。64 个 checkpoint 使用
+eval seed2026/2028 粗筛后，只有 seed105/agent400 达到 2/2。扩大复核显示：
+
+| policy / evaluation | success / platform | fall | mean max Y |
+|---|---:|---:|---:|
+| fixed parent，random-X10，16 seed | 2/16 | 14/16 | 2.094 |
+| seed105/agent400，random-X10，16 seed | 4/16 | 12/16 | 2.670 |
+| seed105/agent400，fixed x=0，5 seed | 0/5 | 5/5 | 2.121 |
+
+400 步微调虽然把窄范围随机 X 从 12.5% 提升到 25%，却完全遗忘 fixed 基线，因此不能晋级 X25。
+后续仍只增加随机 X 难度，在并行训练 reset 中分别保留 50% 和 75% 的固定 `x=0` 样本做回放，
+每个占比运行两个独立训练 seed。checkpoint 选择先要求 fixed `x=0` 回归通过，再比较 random-X10，
+避免仅按随机样本选出灾难性遗忘的策略。
+
+50%/75% fixed-X 回放四条线均训练 6400 步，每 200 步保存。128 个 checkpoint 先用固定 `x=0`
+单环境轨迹门控，17 个 checkpoint 保住基线；再对这 17 个点使用 random-X10 的 eval2026/2028
+粗筛，只有 mix75 seed115/agent5800 同时为 fixed 1/1、random-X10 2/2。扩大复核：
+
+| candidate / evaluation | success / platform | fall | mean max Y |
+|---|---:|---:|---:|
+| mix75 seed115/agent5800，fixed x=0，5 seed | 5/5 | 0/5 | 7.802 |
+| mix75 seed115/agent5800，random-X10，16 seed | 6/16 | 10/16 | 3.337 |
+
+该候选同时保住 fixed 基线，并将 random-X10 从父模型的 `2/16` 提高到 `6/16`，证明固定回放有效；
+但 37.5% 仍不足以进入 X25。10 次失败包含 7 次翻倒和 3 次底盘触地，正负 X 均有成功和失败，
+失败位置分散在坑洼内部与 `y=2.08--2.13` 出口，不是单纯左右偏置。
+
+最后一轮 X10 continuation 从 seed115/agent5800 初始化，把训练随机 X 样本占比由 25% 提高到 50%
+（mix50），运行两条保留 optimizer 与两条重置 optimizer 的 3200 步对照。仍先做 fixed 门控，再做
+16-seed random-X10 复核；若不能在 fixed 5/5 的同时超过 `6/16`，停止 random-X，不扩大到 X25。
+
+四条 continuation 均完成 3200 步、每 200 步保存。64 个 checkpoint 先做 fixed `x=0` 门控，
+11 个通过；这 11 个点再用 random-X10 的 eval2026/2028 粗筛，没有任何 2/2 候选。保留 optimizer
+与重置 optimizer 均未超过父 checkpoint，因此按预设终止条件全部淘汰。
+
+渐进 random-X 最终冻结在 mix75 seed115/agent5800：fixed `5/5`、random-X10 `6/16`、
+random-X10 fall `10/16`，尚未通过。它优于 fixed 父模型在相同 X10 seed 集合上的 `2/16`，且没有
+遗忘 fixed 能力，但未达到至少半数成功的晋级门槛。因此不训练 X25/X50，也不启动 random-Y、yaw
+或 1 秒停稳。本轮证据说明固定回放解决了灾难性遗忘，却仍未解决坑洼接触轨迹敏感性。
+
+### random-X 路线切换：直接动作策略
+
+补充审查两份已通过同学作业后，确认它们解决的是不同问题：
+
+- `submission/MotrixArena-S1-final-project` 是当前 fixed 课程的来源，采用四拍参考步态加 PPO 小残差，
+  只报告固定 `x=0,y=-2.4` 的 5/5；它没有提供随机 X 鲁棒性证据。
+- `结营作业 Section1` 采用低通滤波后的直接关节目标残差，训练 reset 实际硬编码为 X/Y 各 `±0.1`，
+  Torch PPO 从零训练 60,000 更新后达到 `55/64`（85.9%）到达率。其 checkpoint 仅作诊断，
+  不加载、不复制，也不作为本项目成果。
+
+因此停止在固定参考步态上继续增加 phase/handoff specialist。新增隔离环境
+`vbot-section01-direct-random-x10-course`，保留本项目 78 维观测、高度扫描、正式终点和评估协议，
+只把控制结构改为 `filtered_action -> default_joint_angles + 0.25 * action`，PD 参数为 `Kp=80,Kd=6`。
+正式 reset 只随机 X `[-0.1,0.1]`，Y 固定 `-2.4`、yaw 固定 `+Y`，不同时增加其他难度。
+
+PPO 对齐已通过实现的 `256-128-64` 独立 policy/value、learning rate `3e-4`、rollouts `24`、
+epochs `5`、mini-batches `8`、entropy `0.001`、1024 environments、60,000 updates。四卡从零训练，
+唯一对照变量为 initial log std `1.0/0.0/-0.5/-1.0`。所有权重均由本项目生成；最终候选仍需先过
+fixed 回归，再过 random-X10 的多 seed 单环境评估。
+
+20k checkpoint 首轮从正式起点评估已证明 direct-action 路线能穿过坑洼，不再是固定参考
+步态的“坑洼入口趴倒”故障。eval seed2026 中 seed135 严格到达终点（`maxY=7.829`），
+seed133 曾上平台（`maxY=9.346`）但未在严格终点前保持稳定。扩大至 eval seed2026--2029 后：
+
+| direct-action 20k checkpoint | strict success | ever on platform | fall | mean max Y |
+|---|---:|---:|---:|---:|
+| seed133 / log-std 0.0 | 2/4 | 3/4 | 2/4 | 6.471 |
+| seed135 / log-std -1.0 | 2/4 | 3/4 | 2/4 | 6.275 |
+
+这是多评估 seed 的通过证据，但 random-X10 还不足以晋级。四条线保持单变量对照继续训练，
+在 40k 和 60k 节点用独立 `num_envs=1` 轨迹评估；粗筛后再用 16 个 eval seed 选择候选。
+只有 random-X10 成功率超过旧最佳 `6/16`，且 fixed `x=0` 回归不退化，才会依次开启 X25、
+X50、random-Y、yaw 和 1 秒停稳。
+
+40k checkpoint 使用 eval seed2026--2029、每个 seed 独立 `num_envs=1` 正式起点轨迹复核。
+评估期间暂停四条训练进程，四卡并行评估后恢复，无训练/评估 GPU 竞争。结果为：
+
+| direct-action 40k checkpoint | full success | ever on platform | stable success | fall | mean max Y |
+|---|---:|---:|---:|---:|---:|
+| seed132 / log-std 1.0 | 0/4 | 2/4 | 0/4 | 4/4 | 5.094 |
+| seed133 / log-std 0.0 | 0/4 | 1/4 | 0/4 | 4/4 | 2.668 |
+| seed134 / log-std -0.5 | 2/4 | 2/4 | 0/4 | 2/4 | 4.046 |
+| seed135 / log-std -1.0 | 1/4 | 4/4 | 0/4 | 2/4 | 9.285 |
+
+seed135 的平台到达率从 20k 的 `3/4` 提高到 `4/4`，是当前 random-X10 主候选；
+seed134 在 full success 终止条件下为 `2/4`。seed135 的四条轨迹均跨过坑洼、坡面和
+`y=7.8`：一条正常 success，两条上台后 base contact，一条到 40 秒回合上限时仍在运动。
+当前 direct-action 环境的 `stable_hold_seconds=0`，因此 stable success 指标必然为 0，这一阶段
+只验证 random-X10 导航与越障；1 秒停稳仍按难度顺序放在 random-Y 和 yaw 通过之后。
+四条线继续完成同学方案规定的 60k 长度，最终扫描 20k--60k 中间 checkpoint，不默认
+60k 末点最优。
+
+50k 和 60k 使用相同 eval seed2026--2029 进行了末点对照。50k 全部退化：seed132/133/134
+各只有 `1/4` 平台，seed135 为 `0/4`。60k 时 seed135 恢复到 `3/4` 平台、`2/4` full
+success，其他三条仍各为 `1/4` 平台。因此规定的 60k 训练长度已完整跑完，但
+checkpoint 选择不使用末点，仍使用 seed135/agent40000。
+
+seed135/agent40000 补充 eval seed2030--2041，与已有 seed2026--2029 合并为 16 条独立
+`num_envs=1` 轨迹：
+
+| evaluation | full success | ever on platform | fall | mean max Y |
+|---|---:|---:|---:|---:|
+| random-X10，16 seed | 7/16 | 14/16 | 8/16 | 7.824 |
+| fixed `x=0`，5 seed | 5/5 | 5/5 | 0/5 | 8.991 |
+
+该 checkpoint 保住了 fixed 基线，并将 random-X10 平台率从旧路线上限 `6/16` 提高到
+`14/16`。本项目验收目标是“踏上平台并停稳”，不要求精确到达中心；因此在尚未开启
+1 秒停稳的当前阶段，`ever_on_platform` 是晋级主指标，full success 中的中心/航向约束是辅助指标。
+random-X10 因而通过，允许只增加 X 范围进入 X25。
+
+权威 checkpoint 已同步到
+`artifacts/checkpoints/course_torch/direct_x10_seed135_agent40000.pt`，SHA-256 为
+`7e0c856eee7f5867fe026ef6dab84098ccc6a6805b3c97fe23f1de9410c9f506`。16-seed 和 fixed 原始日志保存在
+`artifacts/evaluations/course_torch/direct_x10_seed135_agent40000/`。
+
+X25 新增隔离环境 `vbot-section01-direct-random-x25-course`，冒烟验证 reset X 位于
+`[-0.25,0.25]`、Y 全部为 `-2.4`、观测 `(num_envs,78)`。四条 seed142--145 均从上述
+seed135/agent40000 warm-start，保留 checkpoint optimizer，每条 1024 environments、60k updates、
+每 1000 updates 保存。四条之间只有训练 seed 不同；Y、yaw、观测、控制、reward 和 PPO
+超参数与 X10 保持一致。
+
+X25 训练刚启动时，先暂停训练并对父 checkpoint 直接评估 eval seed2026--2041，
+建立与 continuation 对比的零训练基线：
+
+| X25 parent baseline | full success | ever on platform | fall | mean max Y |
+|---|---:|---:|---:|---:|
+| seed135/agent40000，16 seed | 7/16 | 10/16 | 9/16 | 5.963 |
+
+父模型在 X25 已经具有一定泛化，因此 X25 continuation 不能只以“偶尔上台”为改善证据。
+晋级门槛是在相同 16 个 eval seed 上超过父模型 `10/16` 平台率，并通过 fixed `x=0`
+回归；同时复核 X10，防止扩大起点范围后丧失已学会的窄范围能力。基线原始日志保存在
+`artifacts/evaluations/course_torch/direct_x25_parent_baseline/`。
+
+X25 `agent5000` 早期健康检查先用 eval seed2026--2029 粗筛：seed142 和 seed144 均为
+`4/4` 平台、`2/4` full success；seed143/145 各为 `2/4` 平台。扩大 seed142 和 seed144 至
+eval seed2026--2041 后：
+
+| X25 5k checkpoint | full success | ever on platform | fall | mean max Y |
+|---|---:|---:|---:|---:|
+| seed142 | 5/16 | 9/16 | 11/16 | 4.955 |
+| seed144 | 9/16 | 12/16 | 7/16 | 6.292 |
+
+seed144 的 X25 平台率超过父模型 `10/16`，但分层回归验证未通过：
+
+| seed144/agent5000 regression | full success | ever on platform | fall | mean max Y |
+|---|---:|---:|---:|---:|
+| fixed `x=0`，5 seed | 0/5 | 0/5 | 5/5 | -0.537 |
+| random-X10，16 seed | 6/16 | 10/16 | 10/16 | 5.659 |
+
+因此 seed144/agent5000 是“X25 表面提升但灾难性遗忘 fixed”的退化 checkpoint，不晋级。
+四条 X25 继续到 20k，届时先跑 fixed 门控，再对通过者评估 X25。如果四条都不能恢复
+fixed，则在 X25 训练 reset 中引入显式 fixed `x=0` replay，仍不增加随机 Y、yaw 或停稳。
+本轮原始日志保存在 `artifacts/evaluations/course_torch/direct_x25_5k/`。
+
+10k 先对四条 checkpoint 各做一条 fixed 门控：seed142 正常 success，seed143/144 曾上平台但
+随后触底，seed145 在前段失败。只对 seed142/agent10000 扩大评估：
+
+| seed142/agent10000 evaluation | full success | ever on platform | fall | mean max Y |
+|---|---:|---:|---:|---:|
+| fixed `x=0`，5 seed | 5/5 | 5/5 | 0/5 | 7.805 |
+| random-X10，16 seed | 5/16 | 9/16 | 10/16 | 5.278 |
+| random-X25，16 seed | 5/16 | 11/16 | 11/16 | 6.195 |
+
+seed142/agent10000 恢复了 fixed，X25 平台率也略高于父模型 `10/16`，但 X10 从父模型
+`14/16` 退化到 `9/16`，因而仍不晋级。到 10k 为止，普通 X25 continuation 已出现两种
+互补失败：seed144 提高 X25 但忘记 fixed，seed142 保住 fixed 但忘记 X10。四条继续到
+20k 观察是否自行恢复；若仍无同时通过者，下一轮 X25 reset 显式回放 fixed 样本，而不增加
+新的任务难度。原始日志保存在 `artifacts/evaluations/course_torch/direct_x25_10k/`。
+
+20k 分层门控中，seed142/145 的 fixed 都为 `5/5`；seed143 前段失败，seed144 虽上平台但
+随后触底。seed145 的 X10 粗筛仅 `1/4` 平台，因此只扩大 seed142/agent20000：
+
+| seed142/agent20000 evaluation | full success | ever on platform | fall | mean max Y |
+|---|---:|---:|---:|---:|
+| fixed `x=0`，5 seed | 5/5 | 5/5 | 0/5 | 9.073 |
+| random-X10，16 seed | 5/16 | 14/16 | 10/16 | 8.060 |
+| random-X25，16 seed | 5/16 | 10/16 | 11/16 | 6.105 |
+
+该 checkpoint 保留了 fixed 和 X10 能力，X25 平台率达到 `10/16`，满足当前阶段过半门槛。
+它没有超过父 checkpoint 的 X25 零训练基线，但与 5k/10k 的灾难性遗忘不同，也没有为较宽 X
+范围牺牲旧能力。考虑到 direct-action 训练已多次出现中间 checkpoint 优于后续末点，
+四条 X25 在 20k 冻结，GPU 转入最终正式 X 范围，不为追求训练长度继续冒遗忘风险。
+
+权威 X25 checkpoint 已同步到
+`artifacts/checkpoints/course_torch/direct_x25_seed142_agent20000.pt`，SHA-256 为
+`fc781b78a02062c46a7e123aed1ef5017dd56fd6983bfdc679e9366eda5aeb3a`。原始评估日志保存在
+`artifacts/evaluations/course_torch/direct_x25_20k/`。
+
+### 正式 random-X：`[-0.5,0.5]`
+
+新增隔离环境 `vbot-section01-direct-random-x50-course`，唯一变化是 `start_x_range=(-0.5,0.5)`。
+8 环境 reset 冒烟验证 X 均在该范围内、Y 全部为 `-2.4`、观测 `(8,78)`。X25 权威
+checkpoint 的 X50 零训练基线为：
+
+| X50 parent baseline | full success | ever on platform | fall | mean max Y |
+|---|---:|---:|---:|---:|
+| seed142/agent20000，16 seed | 3/16 | 10/16 | 13/16 | 5.614 |
+
+四条 X50 seed152--155 从该 checkpoint warm-start，保留 optimizer，使用 1024 environments、
+60k 上限、每 1000 updates 保存。只有训练 seed 不同，Y、yaw、reward、control 和 PPO 不变。
+在 5k/10k/20k 先做阶段门控；若出现保留 fixed/X10/X25 且 X50 平台率过半的 checkpoint，
+则冻结并进入 random-Y，避免重复已证明的过训练退化。零训练基线日志保存在
+`artifacts/evaluations/course_torch/direct_x50_parent_baseline/`。
+
+X50 5k 先做 fixed 门控，只有 seed155 正常 success。seed155/agent5000 的分层粗筛为 fixed
+`5/5`、X10 `2/4`、X25 `1/4`、X50 `2/4`，旧能力和新范围均未通过。10k fixed 门控中
+seed152/153 正常 success，分层粗筛为：
+
+| X50 10k checkpoint | fixed | X10 platform | X25 platform | X50 platform |
+|---|---:|---:|---:|---:|
+| seed152 | 5/5 | 4/4 | 2/4 | 1/4 |
+| seed153 | 5/5 | 1/4 | 3/4 | 2/4 |
+
+两条都表现为“保住 fixed 但遗忘旧随机 X，且 X50 不比父模型好”。因此普通 X50 continuation
+在 10k 停止，不继续用训练长度掩盖退化。相比之下，X25 权威 checkpoint 未在 X50 上微调就已达到
+`10/16` 平台，同时 fixed `5/5`、X10 `14/16`、X25 `10/16`。因此它直接作为 X50
+验证通过权重，不选任何退化 X50 continuation checkpoint。X50 5k/10k 日志分别保存在
+`artifacts/evaluations/course_torch/direct_x50_5k/` 和 `artifacts/evaluations/course_torch/direct_x50_10k/`。
+
+### 正式 random-X/Y
+
+新增环境 `vbot-section01-direct-random-xy-course`，X 保持 `[-0.5,0.5]`，唯一新增难度是 Y 从
+`-2.4` 扩到 `[-2.9,-2.0]`，yaw 仍为 0 扰动。16 环境 reset 冒烟验证 X/Y 范围、
+78 维观测和其他配置正确。X50 权威权重的 random-XY 零训练基线为：
+
+| random-XY parent baseline | full success | ever on platform | fall | mean max Y |
+|---|---:|---:|---:|---:|
+| seed142/agent20000，16 seed | 1/16 | 4/16 | 15/16 | 2.181 |
+
+随机 Y 是实质新难度，不能零训练晋级。四条 random-XY seed162--165 从同一权威 checkpoint
+warm-start，保留 optimizer，1024 environments、60k 上限、每 1000 updates 保存。只有训练 seed 不同，
+yaw/reward/control/PPO 不变。零训练基线日志保存在
+`artifacts/evaluations/course_torch/direct_xy_parent_baseline/`。
+
+random-XY 5k fixed 门控只有 seed162/165 成功。对两者分层粗筛：
+
+| random-XY 5k checkpoint | fixed | X10 platform | X25 platform | X50 platform |
+|---|---:|---:|---:|---:|
+| seed162 | 5/5 | 3/4 | 2/4 | 2/4 |
+| seed165 | 5/5 | 2/4 | 4/4 | 1/4 |
+
+两条都未保留旧随机 X 能力。10k fixed 门控只有 seed164 成功，其分层粗筛为 fixed `5/5`、
+X10 `3/4`、X25 `3/4`、X50 `2/4`，仍不合格。普通 random-XY continuation 因而在 10k 停止；
+它能保住 fixed，但将训练分布全部切到随机 Y 后会忘记固定 Y 下的旧随机 X 轨迹。5k/10k 日志分别
+保存在 `artifacts/evaluations/course_torch/direct_xy_5k/` 和
+`artifacts/evaluations/course_torch/direct_xy_10k/`。
+
+为保留旧分布，新增两个只改训练 reset 采样的隔离环境：
+
+- `vbot-section01-direct-random-xy-mix50-course`：50% 回合固定 `Y=-2.4`，50% 回合随机 Y；
+- `vbot-section01-direct-random-xy-mix75-course`：75% 回合固定 `Y=-2.4`，25% 回合随机 Y。
+
+256 环境冒烟中分别有 121 和 191 个 fixed-Y 样本，其余样本 Y 完整覆盖 `[-2.9,-2.0]`，
+X 仍为 `[-0.5,0.5]`、观测仍为 78 维。四卡对照为 mix50 seed172/173 和 mix75 seed174/175，
+都从未退化的 X25 权威 checkpoint 启动，其他训练条件完全一致。单环境正式评估不触发
+replay，仍从各自评估环境的真实起点分布采样。
+
+Y replay 5k fixed 门控只有 mix75 seed174 成功，其分层粗筛为 fixed `5/5`、X10 `1/4`、
+X25 `3/4`、X50 `1/4`，仍明显遗忘旧随机 X。10k fixed 门控只有 mix50 seed173 成功，
+其结果为 fixed `5/5`、X10 `3/4`、X25 `2/4`、X50 `1/4`。这证明只改 replay 比例仍不足以阻止
+`3e-4` PPO 在新分布上快速漂移，四条在 10k 停止。日志保存在
+`artifacts/evaluations/course_torch/direct_xy_replay_5k/` 和
+`artifacts/evaluations/course_torch/direct_xy_replay_10k/`。
+
+下一轮保持两种 replay 分布不变，使用 2x2 对照降低学习率：
+
+| train seed | Y replay | learning rate |
+|---:|---:|---:|
+| 182 | 50% | `1e-4` |
+| 183 | 50% | `5e-5` |
+| 184 | 75% | `1e-4` |
+| 185 | 75% | `5e-5` |
+
+四条均从 X25 权威 checkpoint 启动，删除 checkpoint 内的 optimizer 状态后重建 optimizer，以确保新学习率
+不被原 `3e-4` optimizer param group 覆盖。policy/value 权重和 observation/value normalizer 仍保留。
+四条之间只有 replay 比例与 learning rate 两个显式对照因子，其他条件一致。
+
+5k fixed 门控中，mix50 seed182/183 成功，mix75 seed184/185 失败。对两个通过者的旧层粗筛：
+
+| low-LR random-XY 5k | fixed | X10 platform | X25 platform | X50 platform |
+|---|---:|---:|---:|---:|
+| seed182，mix50/`1e-4` | 5/5 | 3/4 | 3/4 | 1/4 |
+| seed183，mix50/`5e-5` | 5/5 | 2/4 | 3/4 | 3/4 |
+
+`5e-5` 相比 `1e-4` 能更好保留 X50，说明减小更新步幅方向有效，但 X10 仍未过门。10k
+fixed 门控中 seed182/183/184 成功，seed185 上台后触底。优先复核 seed183 和 seed184：
+
+| low-LR random-XY 10k | fixed | X10 platform | X25 platform | X50 platform |
+|---|---:|---:|---:|---:|
+| seed183，mix50/`5e-5` | 5/5 | 2/4 | 3/4 | 2/4 |
+| seed184，mix75/`1e-4` | 5/5 | 3/4 | 1/4 | 1/4 |
+
+10k 仍无同时通过者。由于低学习率需要更多 updates 才能学习随机 Y，四条继续到 20k；20k
+是这一 2x2 轮次的终止评估点，如果仍无合格 checkpoint，不继续以更长训练掩盖分布遗忘。
+5k/10k 日志保存在 `artifacts/evaluations/course_torch/direct_xy_low_lr_5k/` 和
+`artifacts/evaluations/course_torch/direct_xy_low_lr_10k/`。
+
+20k 末点首先使用 fixed `x=0,y=-2.4` 做 5 次确定性门控。四条均为 `0/5` 上平台、
+`100%` 跌倒，最大 Y 分别为 seed182 `0.121`、seed183 `1.862`、seed184 `0.921`、
+seed185 `0.786`，因此 20k 末点全部淘汰。fixed 环境没有 reset 随机性，5 个评估 seed 的轨迹
+逐项一致；随后用单条 fixed 轨迹补扫 11k--19k 中间 checkpoint，找到 8 个保住 fixed 的候选，
+证明不能仅依据末点判断整轮失败。
+
+对 8 个中间候选逐层门控后，X10 只保留 4 个候选；X25 中只有
+seed182/agent11000 达到 `3/4` 曾上平台、`2/4` 正常完成。该点在 X50 上仅 `1/4` 曾上平台、
+`1/4` 正常完成、`3/4` 跌倒，明显低于未微调父模型的 X50 `10/16`。因此本轮没有同时保住
+fixed、X10、X25 和 X50 的 random-Y checkpoint，不进入正式 random-XY 16-seed 验收，四条训练线
+全部停止。完整原始日志保存在
+`artifacts/evaluations/course_torch/direct_xy_low_lr_20k/`。
+
+失败模式表明，从固定 `Y=-2.4` 一次扩到 `[-2.9,-2.0]` 会同时覆盖过大的平地接近距离和坑洼
+接触相位变化。下一轮仍只增加 Y 随机性，但像 random-X 一样渐进扩展：先训练
+`Y∈[-2.5,-2.3]`，X 保持正式 `[-0.5,0.5]`，yaw 和终点条件不变。新增隔离环境
+`vbot-section01-direct-random-xy10-mix50-course` 与
+`vbot-section01-direct-random-xy10-mix75-course`，分别保留 50%/75% 的 `Y=-2.4` 回放；继续使用
+`1e-4/5e-5` 的 2x2 对照。5k 首次门控，只有保住 fixed 和既有 X 层的候选才继续训练。
+
+窄 Y 四线 seed192--195 在 5k 暂停。fixed 确定性门控中 seed192/193/194 通过，seed195 淘汰；
+X10 四种子中三条平台数分别为 `2/4、3/4、1/4`，只保留 seed193。seed193/agent5000
+在 X25 仅 `2/4` 上平台，未达到继续门槛。补扫全部 1k--4k checkpoint 后，只有
+seed193/agent3000、seed194/agent2000 和 seed194/agent4000 保住 fixed，但三者在 X10 均只有
+`1/4` 上平台且 `4/4` 跌倒；早期点也全部淘汰。
+
+为区分“学会新 Y 但遗忘旧 X”和“新旧都没学会”，使用相同 eval seed2026--2041 对父模型与
+seed193/agent5000 做正式 XY10 对照：父模型为 `2/16` full success、`7/16` 上平台、`14/16`
+跌倒、mean max Y `4.079`；微调点为 `3/16` full success、`5/16` 上平台、`13/16` 跌倒、
+mean max Y `2.507`。微调没有提高窄 Y 平台率，且继续削弱旧 X 能力，因此本轮停止，不训练到 10k。
+日志保存在 `artifacts/evaluations/course_torch/direct_xy10_5k/`。
+
+下一轮回到本项目更稳的 X10 权威 checkpoint `seed135/agent40000`（X10 平台 `14/16`），只增加
+`Y∈[-2.5,-2.3]`。这与已通过同学 direct-action 作业实际使用的 X/Y 各 `±0.1` reset 分布一致，
+但权重仍全部来自本项目。新增 `vbot-section01-direct-random-x10-y10-mix50-course` 与
+`vbot-section01-direct-random-x10-y10-mix75-course`，沿用同一 2x2 replay/learning-rate 对照；
+5k 若不能同时保住 fixed、X10 并改善 XY10，则停止该路线，不继续增加训练长度。
+
+X10+Y10 seed202--205 均按 5k 封顶自然结束。fixed 门控只有 seed202/204 通过；X10 四种子
+分别为 `2/4` 和 `4/4` 上平台，因此只扩大 seed204。seed204/agent5000 的 X10 16-seed 结果为
+`7/16` full success、`12/16` 上平台、`8/16` 跌倒、mean max Y `6.769`，略低于父模型 X10
+平台 `14/16`，但没有灾难性遗忘。决定性 XY10 同种子对照为：
+
+| checkpoint | full success | ever on platform | fall | mean max Y |
+|---|---:|---:|---:|---:|
+| X10 父模型 seed135/agent40000 | 5/16 | 10/16 | 11/16 | 6.180 |
+| seed204/agent5000 | 5/16 | 9/16 | 11/16 | 5.203 |
+
+微调点没有改善 XY10，四条全部淘汰且不续训；但未退化父模型已以 `10/16` 通过 Y10 过半门槛。
+因此保留 seed135/agent40000 作为当前权威 checkpoint，像此前 X50 零训练泛化一样直接晋级，
+不为满足“必须产生新 checkpoint”而选择更差权重。下一步只把 Y 半宽扩到 0.25 m：新增
+`vbot-section01-direct-random-x10-y25-course`（X `[-0.1,0.1]`、Y `[-2.65,-2.15]`），先做
+父模型零训练 16-seed 评估；未取得证据前不启动新训练。日志保存在
+`artifacts/evaluations/course_torch/direct_x10y10_5k/`。
+
+X10+Y25 父模型零训练评估为 `6/16` full success、`9/16` 上平台、`10/16` 跌倒、mean max Y
+`5.477`，仍超过当前阶段的平台率过半门槛。因此 Y25 直接通过，继续保留未退化的
+seed135/agent40000，不启动 continuation。下一步新增
+`vbot-section01-direct-random-x10-yfull-course`，只将 Y 扩到正式 `[-2.9,-2.0]`，X 仍保持
+`[-0.1,0.1]`；先做同一 16-seed 零训练评估，避免把正式 X/Y 同时扩展造成的失败错误归因给 Y。
+Y25 原始日志保存在 `artifacts/evaluations/course_torch/direct_x10y25_parent_baseline/`。
+
+X10+正式 Y 全范围的父模型零训练结果为 `4/16` full success、`9/16` 上平台、`12/16` 跌倒、
+mean max Y `5.208`，仍通过平台率过半门槛。由此可见 Y 全范围本身可被 seed135/agent40000
+泛化，先前 X50+Yfull 的低平台率主要来自两个空间维度同时处于最大范围，以及微调造成的策略漂移。
+继续保留同一权重，新增 `vbot-section01-direct-random-x25-yfull-course`，只把 X 从 `±0.1` 扩到
+`±0.25`，Y 保持正式 `[-2.9,-2.0]`，先做 16-seed 零训练评估。X10+Yfull 日志保存在
+`artifacts/evaluations/course_torch/direct_x10yfull_parent_baseline/`。
+
+X25+Yfull 零训练结果为 `3/16` full success、`10/16` 上平台、`12/16` 跌倒、mean max Y
+`5.836`，平台率通过。继续把 X 扩到正式 `[-0.5,0.5]` 后，首批 16 seed 为 `7/16` 上平台；
+补充独立 seed2042--2057 后，合并 32 seed 为 `4/32` full success、`12/32` 上平台、`27/32`
+跌倒、mean max Y `3.425`，正式 X50+Yfull 未通过。
+
+下一轮只解决 X25→X50：新增
+`vbot-section01-direct-random-xy-x25mix50-course` 与
+`vbot-section01-direct-random-xy-x25mix75-course`。训练环境的 Y 始终是正式全范围，X 分别以
+50%/75% 概率从已通过的 `[-0.25,0.25]` 回放，其余从正式 `[-0.5,0.5]` 采样；单环境评估
+忽略 replay，始终使用正式 X/Y。四线使用 `1e-4/5e-5` 2x2 对照，从 seed135/agent40000
+warm-start 并重置 optimizer，训练严格封顶 2000 updates、每 500 保存。正式 XY 32-seed 日志
+保存在 `artifacts/evaluations/course_torch/direct_x50yfull_seed135_baseline/`。
+
+四条 X replay 训练均完成 2000 updates 并自然退出。16 个 500-step 间隔 checkpoint 的 fixed
+确定性早筛仅留下 5 个；X10 四种子回归后只剩 mix50/`5e-5` 的
+seed213/agent2000 达到 `3/4` 上平台。该点在 X25+Yfull 达到 `4/4` 上平台、`1/4` full success，
+说明窄 X replay 确实保住了已通过层；但放到正式 X50+Yfull 后为 `0/4` 上平台、`4/4` 跌倒、
+mean max Y `0.228`，比未微调父模型还差。其余候选在 X10 只有 `0--1/4` 上平台，均已淘汰。
+
+因此 2k replay 实验按预设停止，不扩 16 seed、不续训。当前权威边界仍为本项目自己的
+seed135/agent40000：X10+Yfull `9/16` 平台，X25+Yfull `10/16` 平台，X50+Yfull `12/32`
+平台。正式随机 X/Y 尚未通过，不能进入 yaw 或 1 秒停稳。原始日志保存在
+`artifacts/evaluations/course_torch/direct_xy_xreplay_2k/`；所有 GPU 已释放。
+
+### 正式出生坐标分箱诊断与 random-X scratch
+
+为避免继续把 X/Y 组合失败错误归因给单一维度，评估器新增逐回合 `start_x/start_y`、平台到达与
+停稳字段，并对 seed135/agent40000 在正式 random-XY 下重新运行 eval seed2026--2057，共 32 条
+独立 `num_envs=1` 确定性轨迹。总结果与原基线一致：`4/32` strict success、`12/32` 曾上平台、
+`27/32` 跌倒、mean max Y `3.425`。waypoint crossing 为
+`[-1.75:32, 1.0:18, 1.55:15, 1.75:15, 2.15:12, 6.8:12, 7.8:12]`。
+
+出生坐标边际统计揭示两个前段失败桶：
+
+| 正式 XY 分箱 | episodes | ever on platform | 到达 y>=1.0 | mean max Y |
+|---|---:|---:|---:|---:|
+| X `[-0.50,-0.25]` | 5 | 0/5 | 0/5 | -0.938 |
+| X `[-0.25,0.00]` | 8 | 6/8 | 7/8 | 6.676 |
+| X `[0.00,0.25]` | 6 | 2/6 | 4/6 | 3.251 |
+| X `[0.25,0.50]` | 13 | 4/13 | 7/13 | 3.182 |
+| Y `[-2.15,-2.00]` | 8 | 0/8 | 2/8 | -0.322 |
+| Y `[-2.40,-2.15]` | 8 | 5/8 | 6/8 | 6.141 |
+| Y `[-2.65,-2.40]` | 8 | 3/8 | 5/8 | 3.425 |
+| Y `[-2.90,-2.65]` | 8 | 4/8 | 5/8 | 4.454 |
+
+所有 12 条到达 `y>=2.15` 的轨迹都继续到达平台，当前瓶颈明确位于坑洼前段，而非坡面或平台。
+但按“固定 -> random X -> random Y”的单变量协议，仍需先隔离验证 X。相同 32 个 seed 在
+`X∈[-0.5,0.5], Y=-2.4` 下为 `10/32` strict success、`15/32` 曾上平台、`22/32` 跌倒、
+mean max Y `4.090`，尚未达到平台率过半门槛。X 分箱中负边缘 `[-0.50,-0.25]` 仅 `1/5`
+上平台，正边缘 `[0.25,0.50]` 为 `8/13`，说明 random-X 本身仍未通过，不能开始 random-Y 训练。
+
+普通 X25/X50 warm-start、低学习率和 replay continuation 已反复出现策略漂移；与之相对，已通过
+同学的直接动作策略和当前 seed135 都由 60k scratch 训练形成。因此下一轮使用
+`vbot-section01-direct-random-x50-course` 从随机初始化训练四条 60k 独立 seed。四条统一使用
+`initial_log_std=-1.0`、1024 environments、`3e-4`、rollouts 24、epochs 5、mini-batches 8，
+Y 固定 `-2.4`、yaw 固定 `+Y`、无停稳门；唯一差异是训练 seed。checkpoint 先做 fixed/X10
+回归，再做 X50 正式 32-seed 分箱，不能用训练 reward 或单次最大 Y晋级。
+
+X50 scratch seed222--225 使用统一 `initial_log_std=-1.0` 启动。20k fixed 门控四条均未上平台；
+继续到 40k 后，只有 seed223/agent40000 从 fixed 起点曾上平台。扩大验证结果为：
+
+| seed223/agent40000 evaluation | strict success | ever on platform | fall | mean max Y |
+|---|---:|---:|---:|---:|
+| X10，4 seed | 2/4 | 3/4 | 2/4 | 6.311 |
+| X50，32 seed | 11/32 | 24/32 | 16/32 | 6.833 |
+
+X50 waypoint crossing 为 `[-1.75:32, 1.0:28, 1.55:24, 1.75:24, 2.15:24,
+6.8:24, 7.8:23]`。四个 X 分箱的平台率分别为负边缘 `2/5`、中心左 `6/8`、中心右
+`6/6`、正边缘 `10/13`；所有分箱都有成功样本，总平台率达到 75%。因此 random-X 单变量阶段
+正式通过，四条训练在 40k 节点停止，避免后期漂移。权威 checkpoint 归档为
+`artifacts/checkpoints/course_torch/direct_x50_seed223_agent40000.pt`，SHA-256 为
+`cd1501dc3f8da58e15e319e7018e40f10b5ca3031d557f42fe21913c21efbb50`。
+
+随后只增加 random-Y，先对权威 X50 checkpoint 做正式 XY 零训练评估。首批 32 seed 为
+`15/32` 平台；补充独立 seed2058--2089 后，64-seed 合并为 `17/64` strict success、`28/64`
+曾上平台、`41/64` 跌倒、mean max Y `4.263`，平台率 43.75%，未通过。Y 分箱平台率为：
+
+| Y bin | episodes | ever on platform |
+|---|---:|---:|
+| `[-2.90,-2.65]` | 18 | 11/18 |
+| `[-2.65,-2.40]` | 14 | 8/14 |
+| `[-2.40,-2.15]` | 22 | 5/22 |
+| `[-2.15,-2.00]` | 10 | 4/10 |
+
+random-Y 不能靠零样本晋级。下一轮保持正式 X/Y、yaw=0、无停稳门，运行两条从 seed223/40k
+重置 optimizer 的低学习率 warm-start（`5e-5/1e-4`），以及两条 `3e-4`、
+`initial_log_std=-1.0` 的正式 XY scratch。warm-start 在 5k 先门控，scratch 在 20k 首次门控；
+只有同时保住 fixed/X50 并提高正式 XY 的 checkpoint 才晋级。
+
+两条 warm-start seed232/233 在 5k 的 fixed 确定性门控均通过。seed232 的正式 XY 粗筛达到
+`6/8` 上平台，但固定 Y 的 X50 回归仅 `1/4`；seed233 正式 XY 为 `4/8`、X50 为 `2/4`。
+两者都出现“新 Y 样本改善、旧 X50 分布退化”。到 10k 时两条在 fixed 起点均为 `0/1`
+上平台且跌倒，因此按门控协议停止。日志归档在
+`artifacts/evaluations/course_torch/direct_xy_random_y_5k/` 与
+`artifacts/evaluations/course_torch/direct_xy_random_y_10k/`。
+
+正式 XY scratch seed234--237 在 20k 首轮门控中只有 seed235 同时显示 fixed 和正式 XY 潜力，
+四条继续到 40k 后停止。seed235/agent40000 的扩大评估为：
+
+| seed235/agent40000 evaluation | strict success | ever on platform | fall | mean max Y |
+|---|---:|---:|---:|---:|
+| 正式 XY，32 seed | 21/32 | 21/32 | 11/32 | 4.782 |
+| X50 + fixed Y，64 seed | 30/64 | 30/64 | 34/64 | 3.489 |
+
+正式 XY 的 Y 四分箱平台数为 `6/8、7/8、4/8、4/8`（从远到近）；但固定 Y 回归的平台率
+只有 `46.875%`，负 X 边缘 `[-0.50,-0.25]` 更只有 `1/11`。扫描 seed235 的 21k--39k
+中间 checkpoint 也没有找到同时保住 X50 与正式 XY 的点。因此 agent40000 仅归档为候选
+`artifacts/checkpoints/course_torch/direct_xy_seed235_agent40000_candidate.pt`，SHA-256 为
+`52b9779d8f9603602523a27ae56a91f9ff24d22a9cc323208c12d37b77a33880`；不替换 random-X
+权威 checkpoint，也不晋级 yaw。原始结果位于
+`artifacts/evaluations/course_torch/direct_xy_scratch_seed235_40k/` 和
+`artifacts/evaluations/course_torch/direct_xy_seed235_midscan/`。
+
+下一轮仍只增加 random-Y，但把 fixed-Y replay 与 scratch 结合，避免 warm-start optimizer/策略
+漂移和纯 XY scratch 的固定 Y 遗忘。四条均为 1024 environments、`3e-4`、60k 上限、
+每 1000 updates 保存、`initial_log_std=-1.0`、yaw=0、无停稳门：
+
+| GPU | train env | replay | seed | run tag |
+|---:|---|---:|---:|---|
+| 0 | `vbot-section01-direct-random-xy-mix50-course` | fixed Y 50% | 238 | `direct_xy_mix50_scratch_m10_seed238` |
+| 1 | `vbot-section01-direct-random-xy-mix50-course` | fixed Y 50% | 239 | `direct_xy_mix50_scratch_m10_seed239` |
+| 2 | `vbot-section01-direct-random-xy-mix75-course` | fixed Y 75% | 240 | `direct_xy_mix75_scratch_m10_seed240` |
+| 3 | `vbot-section01-direct-random-xy-mix75-course` | fixed Y 75% | 241 | `direct_xy_mix75_scratch_m10_seed241` |
+
+2026-08-16 04:28（T4 本地时间）四条已正常启动。20k/40k checkpoint 同时使用固定 Y 的
+X50 与正式 XY 各至少 32 seed 门控；两者平台率都超过 50% 才允许进入 yaw。评估器同时修正了
+terminal transition 的 waypoint 漏记，并直接输出 `waypoint_crossing_counts` 与
+`waypoint_episode_histogram`；历史日志中的 `7.8` crossing 可能少记成功终止步，但 success、
+ever-on-platform 和 fall 指标不受影响。
+
+20k 时暂停四个训练进程，在同一个 `agent_20000.pt` 上先后执行固定 Y/X50 与正式 XY 各
+32 environments、seed2026 的确定性门控，评估期间训练状态不变化：
+
+| seed | replay | fixed-Y X50 platform/fall | fixed mean max Y | formal XY platform/fall | formal mean max Y |
+|---:|---:|---:|---:|---:|---:|
+| 238 | 50% | 0/32, 32/32 | -0.706 | 0/32, 32/32 | -0.498 |
+| 239 | 50% | 0/32, 32/32 | -0.104 | 0/32, 32/32 | -0.074 |
+| 240 | 75% | 0/32, 32/32 | -0.242 | 0/32, 32/32 | -0.307 |
+| 241 | 75% | 0/32, 32/32 | 0.456 | 0/32, 32/32 | 0.282 |
+
+seed241 在正式 XY 的单回合 `all_time_max_y=3.232`，但没有平台回合且平均最大 Y 仍很低，不能
+作为成功证据。四条在 20k 都尚未形成完整策略；这与已通过的 random-X scratch 四线在 20k
+全部 fixed 失败、到 40k 才出现 seed223 权威点的学习曲线一致。因此 20k 不做 seed 淘汰，四条
+原进程均恢复到 40k 再执行相同双门控。原始日志已归档到
+`artifacts/evaluations/course_torch/direct_xy_mix_scratch_20k/`。
+
+40k 双门控中只有 mix75 seed241 学出完整路线信号：固定 Y 约 `7/33` 上平台，正式 XY
+`15/32` 上平台、`9/32` 正常完成；seed238/239/240 在两种分布仍为 `0/32` 上平台和
+`32/32` 跌倒，三条予以停止。seed241 继续到既定 60k 上限，并利用空闲 GPU 扫描不可变的
+中间 checkpoint。关键节点如下：
+
+| seed241 checkpoint | fixed-Y X50 platform | formal XY platform | 结论 |
+|---:|---:|---:|---|
+| 35k | 9/32 | 13/32 | 两边均未过半 |
+| 40k | 约 7/33 | 15/32 | 偏正式 XY |
+| 41k | 12/32 | 9/32 | 回落 |
+| 45k | 11/32 | 16/32 | 正式 XY 恰好 50%，fixed 未过 |
+| 46k | 19/32 | 11/32 | fixed 通过，正式 XY 退化 |
+| 50k | 4/32 | 15/32 | fixed 严重退化 |
+| 52k | 21/32 | 14/32 | fixed 通过，正式 XY 差 3 回合 |
+| 53k | 19/32 | 9/32 | 偏 fixed |
+| 55k | 18/32 | 6/32 | 偏 fixed |
+| 60k | 12/32 | 8/32 | 两边均退化 |
+
+56k--59k 的 fixed 平台数依次为 `10/32、11/32、12/32、10/32`，均不需要扩大到正式 XY。
+训练呈明显的分布间振荡，不存在一个在 seed2026 双门控中同时超过 50% 的 checkpoint。最接近
+平衡的 52k 使用独立 eval seed2058 再测后，固定 Y 为 `14/32`、正式 XY 为 `12/32`；与首轮
+合并得到 fixed `35/64`（54.7%）通过、正式 XY `26/64`（40.6%）失败，排除了首轮抽样噪声
+导致的误判。52k 仅归档为
+`artifacts/checkpoints/course_torch/direct_xy_mix75_seed241_agent52000_candidate.pt`，SHA-256 为
+`7b90ab9f6fbe3fcbf11fbefa6012e9c576c50a07ba347ed3d03f9584ea6fdcb9`，不晋级 yaw。
+
+mix75 的证据表明 fixed replay 足以保住旧分布，但 75% 比例挤压了正式随机 Y 样本。下一轮只把
+`training_fixed_y_fraction` 从 `0.75` 改为 `0.65`，新增隔离环境
+`vbot-section01-direct-random-xy-mix65-course`；其他环境、观测、reward、control、PPO、
+`initial_log_std=-1.0`、1024 environments 和 60k 长度完全不变。1024 环境冒烟得到 636 个
+fixed-Y 样本，其余 Y 覆盖 `[-2.899,-2.002]`，X 覆盖 `[-0.499,0.500]`，观测为 78 维。
+seed242--245 于 2026-08-16 06:07（T4 本地时间）分别在 GPU0--3 从零启动。40k 首次执行
+双门控，只有同一 checkpoint 的 fixed-Y X50 与正式 XY 平台率都超过 50% 才扩大复核。
+
+mix65 的 40k 双门控结果为：
+
+| seed | fixed-Y X50 platform/fall | formal XY platform/fall | 处理 |
+|---:|---:|---:|---|
+| 242 | 0/32, 32/32 | 0/32, 32/32 | 停止 |
+| 243 | 9/32, 25/32 | 10/32, 21/32 | 续到 60k |
+| 244 | 6/32, 26/32 | 0/32, 32/32 | 停止 |
+| 245 | 1/32, 32/32 | 0/32, 32/32 | 停止 |
+
+只有 seed243 同时具有两种分布的完整路线信号。其 45k、50k、55k、60k 平台数分别为：fixed
+`8/32、12/32、约 8/33、12/32`，formal `11/32、8/32、11/32、7/32`；没有节点接近双过线，
+且 60k 末点 formal 继续退化。mix65 因此整体淘汰，证明仅降低 scratch 训练的 fixed replay
+比例不能消除分布间策略振荡。原始日志归档在
+`artifacts/evaluations/course_torch/direct_xy_mix65_scratch_40k/` 与
+`artifacts/evaluations/course_torch/direct_xy_mix65_seed243_45_60k/`，四张 GPU 已释放。
+
+下一轮不再新增 replay 比例。选择本项目 mix75 seed241/agent52000 作为 consolidation 父点：
+其合并 64 回合 fixed 平台率为 54.7%，formal 为 40.6%，是目前最接近双过线且 fixed 已通过的
+单一 checkpoint。只把训练分布切到既有 `mix50`、学习率降为 `5e-5` 并重置 optimizer，保留
+policy/value 和 normalizer；运行四个训练 seed、10k 上限、每 500 保存。该短续训仍只处理
+random-Y 难度，不加入 yaw 或停稳门。5k/10k 及中间点必须使用相同双门控，父点与续训点均为
+本项目自行训练权重。
+
+consolidation 四线在 500、2500、3500、5000 step 的双门控中均未出现同一 checkpoint 同时保住
+fixed-Y X50 并提升正式 XY；继续训练只在两个出生分布之间振荡，因此全部停止。期间尝试在同一
+进程构造两个 agent、按初始 X 混合动作，但两个 agent 共享了模型或 normalizer 状态：全 alternate
+sanity check 为 `0/32`，全 primary 为 `6/32`，均无法复现单策略结果。这组数字标记为评估器无效
+证据，不用于判断策略优劣。
+
+评估器随后移除双 agent 路径，新增 `--eval-start-x-min/max`，并修正并行回合采样：每个 vectorized
+environment 固定贡献相同回合数，避免快速跌倒环境 reset 后被重复计数、较慢成功回合尚未结束就
+提前凑满 episodes。两个 checkpoint 改为两个独立进程加载，回合 reset 后按初始 X 选择策略，
+回合内不切换：`X<0` 使用本项目 random-X seed223/agent40000，`X>=0` 使用本项目正式 XY
+seed235/agent40000。
+
+隔离评估结果如下；每个单元是 32 回合，各行合并 64 回合：
+
+| eval seed | 条件 | X<0 平台 | X>=0 平台 | 合并平台率 | 合并 normal success |
+|---:|---|---:|---:|---:|---:|
+| 2026 | fixed Y=-2.4 | 13/32 | 24/32 | 37/64 (57.8%) | 30/64 |
+| 2026 | formal random XY | 12/32 | 24/32 | 36/64 (56.3%) | 31/64 |
+| 2058 | fixed Y=-2.4 | 16/32 | 24/32 | 40/64 (62.5%) | 31/64 |
+| 2058 | formal random XY | 18/32 | 19/32 | 37/64 (57.8%) | 30/64 |
+
+两轮合并后 fixed-Y 为 `77/128` 上平台（60.2%），正式 random-XY 为 `73/128`（57.0%），两种
+条件、多 eval seed 均超过 50%。因此 random-Y 阶段以“回合级 X 路由的两个本项目自训练策略”
+通过；这不是往届权重，也不是运动中的 handoff。下一阶段只加入 `initial_yaw_noise=0.15`，分别在
+负 X 和非负 X 分支做零训练评估；若零样本不通过，再各自从对应 checkpoint 进行 6400-step full
+stage continuation，暂不加入 1 秒停稳。
+
+yaw 零训练评估使用 `initial_yaw_noise=0.15`（约 `+-8.6` 度），其余条件与 random-XY 完全相同：
+
+| eval seed | X<0 平台 | X>=0 平台 | 合并平台率 | 结论 |
+|---:|---:|---:|---:|---|
+| 2026 | 14/32 | 21/32 | 35/64 (54.7%) | 通过单轮 |
+| 2058 | 10/32 | 16/32 | 26/64 (40.6%) | 失败 |
+
+两个 eval seed 不一致，yaw 阶段未通过。下一步使用独立 direct-yaw 负 X/非负 X 环境，各自从路由所用
+checkpoint warm-start 两个训练 seed，只加入 yaw 扰动；统一 1024 environments、6400 full-stage
+steps、每 800 保存、`learning_rate=5e-5` 并重置 optimizer，暂不引入停稳终止或停稳奖励。
+
+四条 yaw-only continuation 均完整训练到 6400。8 回合粗筛后，32 回合复核选出负 X
+seed250/agent5600 与非负 X seed253/agent6400：两者组合在 eval2026 和 eval2058 均为
+`37/64` 上平台（57.8%）；normal success 分别为 `28/64` 和 `27/64`。yaw 阶段因此通过，候选仍
+全部是本项目自行训练 checkpoint。
+
+进入最终 1 秒停稳前检查发现，旧 stable 配置在平台上仍向观测写入 `0.8 m/s` 前进命令，且
+`progress=12` 持续奖励前冲，与停稳目标矛盾。修正仅作用于 `stable_hold_seconds>0`：机器人到
+平台区后 command speed 置零，平台内不再累计 forward-progress 或 stall 项，并在 direct reward
+原值上增加 `platform_step=2`、`stable_step=4`。先对 yaw 权重做 stable 零训练评估；不通过时再
+做同样 6400-step、yaw+stable-only continuation。
+
+stable 零训练评估中，负 X 两个 eval seed 均为 `16/32` 曾上平台，非负 X 均为 `21/32`，说明新增
+零速 command 没有破坏前段到达率；但四组 `stable_success_rate` 全为 `0/32`，到达后的旧策略不会
+自行连续停稳。于是从 yaw 选定权重各启动两个 stable-only seed，继续统一 1024 environments、
+6400 steps、每 800 保存、`learning_rate=5e-5`、重置 optimizer；这是课程中的最后一个单变量。
+
+stable v1 四线的 32 个 checkpoint 粗筛均为 `stable_success=0`。新增诊断后，负 X 两个最佳到达点
+在 8 回合中的 `all_time_max_stable_steps=0`；非负 X seed262/agent2400 为 2，
+seed263/agent5600 为 7，而目标是连续 100 step。二值 `stable_step` 几乎从未触发，继续同配方
+没有有效梯度。
+
+因此保留 v1 环境和日志，新增独立 stable-v2：阈值与 1 秒要求完全不变，只在平台内增加
+`-8 * (||linear_velocity||^2 + 0.25 * ||angular_velocity||^2)`（cost clip 到 4）的 dense motion
+penalty，并把已满足阈值时的 `stable_step` 从 4 提到 8。v2 仍从 yaw 候选而不是失败的 v1 权重
+开始，使用相同 6400-step full-stage 协议。
+
+stable-v2 的 32 个 checkpoint 仍全部 `stable_success=0`：负 X 最大连续稳定步始终为 0，非负 X
+最大只有 2，dense motion penalty 没有解决末端样本稀疏。stable-v3 保留 v2 reward 和严格
+100-step 标准，但让训练时 25% environments 从平台 `y in [7.0,7.4]` 的默认站姿起步，另外
+75% 仍从对应负 X/非负 X 的正式 random-XY+yaw 起点训练。评估器强制把
+`training_platform_start_fraction` 置零，所以所有门控和最终指标仍只来自正式出生。
+
+stable-v3 的 32 个 checkpoint 仍全部 `stable_success=0`，正式到达后的最大稳定步没有超过 2。
+对齐已通过同学提交中的 stop 实验代码后确认，其减速任务使用平台前渐进 brake target、brake speed
+tracking、站立质量 shaping，以及带随机前进速度的 brake-zone reset；该同学 README 同时明确主交付
+不要求急停，hybrid 阻尼视频不是纯 RL 结果，因此不复用其 checkpoint 或策略外阻尼。
+
+stable-v4 采用相同结构思想但全部自行实现和训练：从 `y=5.8` 到平台入口 `y=6.9` 将 command speed
+从 0.8 线性降到 0.05，按同一比例衰减 progress，增加 brake tracking 与平台 stand quality；训练
+出生为 25% 平台静止、25% brake 区且初始前进速度 0.4--1.0、50% 正式全程。正式评估继续强制关闭
+两类局部 reset，成功标准仍是原阈值连续 100 control steps。
+
+stable-v4 四线均完整训练到 6400，32 个 checkpoint 的正式出生粗筛仍全部
+`stable_success_rate=0`。最接近的点是非负 X seed293/agent800：`5/8` 曾上平台，
+`all_time_max_stable_steps=4`；负 X 所有节点最大稳定步仍为 0。seed290/291 在 3200 后平台率降为
+0，seed292/293 在 4000--6400 也出现明显路线遗忘，因此不续训、不扩大 stable 评估。
+
+阶段结论：random-XY + yaw 已由本项目两支自训练策略在 eval2026/eval2058 均以 `37/64`
+曾上平台通过；严格连续 1 秒停稳在 v1（直接 stop）、v2（dense motion）、v3（25% 平台课程）和
+v4（平台前渐进刹车 + 随机入场速度）中均未通过。当前停止新增版本，保留全部代码、checkpoint 和
+评估日志作为可复现实验；在出现正式 `stable_success_rate>0` 前不录最终视频、不推最终交付、不更新
+飞书为完成状态。
+
+阶段性权威归档：
+
+- `artifacts/checkpoints/course_torch/yaw_neg_seed250_agent5600.pt`，SHA-256
+  `88891c9e507d82a2f37c268887624e1bb52e7b6877469de403a8749a41e9a972`；
+- `artifacts/checkpoints/course_torch/yaw_pos_seed253_agent6400.pt`，SHA-256
+  `fdfa4e2bac82c2223b8b430459649899ed0b5ed6c94c0340aaddcbc9edea3efd`；
+- `artifacts/checkpoints/course_torch/stable_v4_pos_seed293_agent800_failed_candidate.pt` 仅为失败诊断点，
+  SHA-256 `46b6010561d27412b8696bb067c2ea9412228f4f4c120ffa0862f79b80b66ee2`，不得作为完成成果。
+
+## 2026-08-16：恢复同学结构的完整 random-XY 四阶段课程
+
+目标路线重新收敛为：同学已验证的 78 维观测、24 点地形扫描、四拍参考步态、PPO residual、
+NumPy/MotrixSim 环境和 Torch PPO。固定条件继续使用本项目已经按
+`S1 9600 -> S2 16000 -> S3a 16000 -> full 6400` 重新训练并通过 5/5 的权威 checkpoint，
+不重复消耗 GPU 重训固定基线，也不加载同学权重。
+
+此前 random-X 失败有一个课程层面的缺口：位置扰动只在 fixed full 之后做 6400-step full
+continuation，S1、S2 和 S3a 仍只见过固定位置。失败轨迹集中在坑洼接触和坡脚，说明仅微调 full
+不足以让基础步态和分段地形技能适应不同接触轨迹。本轮新增独立环境：
+
+| 阶段 | 环境 | 标准步数 | 位置分布 |
+| --- | --- | ---: | --- |
+| S1 | `vbot-section01-peer-xy-s1-course` | 9600 | 正式 `X[-0.5,0.5],Y[-2.9,-2.0]` |
+| S2 | `vbot-section01-peer-xy-s2-course` | 16000 | 正式 `X[-0.5,0.5],Y[-2.9,-2.0]` |
+| S3a | `vbot-section01-peer-xy-s3a-course` | 16000 | 坡前 `X[-0.5,0.5],Y[0.9,1.1]` |
+| full | `vbot-section01-peer-xy-full-course` | 6400 | 正式 random XY + 原有局部课程起点 |
+
+四个环境的 yaw noise 和 stable hold 均为 0；控制器、观测、奖励、PPO 网络和超参数不变。
+训练入口新增经过审查的阶段默认长度，避免命令遗漏或误填 `stage_steps`。1024 环境 reset 冒烟确认
+S1/S2/full 覆盖完整正式 X/Y，S3a 覆盖坡前 XY，观测均为 78 维；原 fixed S3a reset 仍保持
+`x=0,y=1.0`，无回归。
+
+random-XY S1 使用本项目四条 fixed S1/agent9600 分别 warm start，训练 seed42--45、每卡一条、
+每 800 step 保存。2026-08-16 10:37 四个进程已在 T4 GPU0--3 正常启动。S1 完成后先用多个
+独立单环境 seed 评估 random-XY 到 `y=-1.75` 的成功率、跌倒率和 X/Y 分箱；选择通过点进入 S2。
+random-XY 未通过前不增加 yaw，yaw 未通过前不增加 1 秒停稳。
+
+S1 四条均完成 9600 step。48 个 checkpoint 首轮统一使用 `num_envs=1`、每点 4 个 random-XY
+回合扫描；四条训练线都出现 `4/4` 且零跌倒的候选。每条选一个候选后使用独立 eval seed2058
+扩大到 16 个 random-XY 回合，并对固定 S1 做 8 回合回归：
+
+| S1 candidate | random-XY success | fall | timeout | fixed success |
+| --- | ---: | ---: | ---: | ---: |
+| seed42/agent8800 | 16/16 | 0/16 | 0/16 | 8/8 |
+| seed45/agent9600 | 15/16 | 1/16 | 0/16 | 8/8 |
+| seed43/agent4800 | 13/16 | 0/16 | 3/16 | 8/8 |
+| seed44/agent7200 | 12/16 | 2/16 | 2/16 | 8/8 |
+
+seed42/agent8800 同时保住固定分布并在两个评估 seed 的 random-XY S1 中得到 `4/4 + 16/16`，
+因此作为唯一 S2 父点。2026-08-16 10:53，random-XY S2 seed42--45 已分别在 GPU0--3 启动，
+统一训练 16000 step、每 800 保存；唯一新增难度仍是位置分布，不含 yaw 或停稳要求。
+
+第一批 random-S1 -> random-S2 四线均完成 16000 step。80 个 checkpoint 的单环境 2 回合粗筛
+只有 seed42/agent16000 出现 1/2 成功；扩大到四个独立 eval seed、共 32 回合后为 `3/32` 成功、
+`29/32` 跌倒。所有回合均通过 S1 终点 `y=-1.75`，但只有 8/32 到 `y>=1.0`、5/32 到
+`y>=1.55`。三个成功样本都来自负 X，正 X 两个分箱 17 个回合均未成功，因此该 checkpoint
+不能进入 S3a。
+
+随后做 stage-matched parent 诊断：第一批 agent16000 回到固定 S2 为 `0/8`、100% 跌倒，证明从
+random-S1 初始化后重新训练 S2 导致了坑洼技能不足/遗忘。相反，本项目 fixed-S2 权威点
+seed44/agent16000 未做任何 random 训练，直接在相同 random-XY S2 环境的 24 回合中得到
+`15/24` 成功、`9/24` 跌倒。正确的单难度迁移应从“已掌握当前地形阶段”的 fixed-S2 权重增加
+位置扰动，而不是从只完成 S1 的 random 权重重新学习坑洼。
+
+据此淘汰第一批 S2 四线，但保留全部日志为失败证据。2026-08-16 11:24，从 fixed-S2
+seed44/agent16000 启动新的 random-XY S2 seed142--145，仍为 Torch、1024 environments、
+16000 step、每 800 保存、原始 PPO 超参数；yaw 和停稳继续关闭。
+
+stage-matched S2 四线完成后，80 个 checkpoint 的 2 回合粗筛出现大量 `2/2` 候选。每条训练线
+扩大一个候选到 16 回合，seed143/agent10400 以 `13/16` 明显领先；随后增加四个独立 eval seed
+各 8 回合。加权汇总为 5 个 eval seed、48 回合中 `38/48` 成功、`10/48` 跌倒、无 timeout，
+成功率 79.17%。固定 S2 回归为 `8/8`。该点同时优于未微调 fixed-S2 父点的 random-XY
+`15/24`（62.5%）并保留固定能力，因此 random-XY S2 正式通过。
+
+S3a 继续采用 stage-matched 原则，不从 S2 权重重新学习坡面。两个本项目 fixed-S3a/agent16000
+先做 random 坡前 `X[-0.5,0.5],Y[0.9,1.1]` 零训练比较：fixed-S3a seed42 为 `7/16`，seed43
+为 `9/16`。选择 seed43 作为父点，于 2026-08-16 12:00 启动 random-XY S3a seed242--245，
+每条 16000 step、每 800 保存；yaw 和停稳继续关闭。
+
+## 2026-08-16：同学结构路线最终结果
+
+后续阶段继续采用 stage-matched parent：每个新地形阶段从本项目已经掌握同一阶段的 fixed 权重
+增加 random XY，而不是把前一阶段权重直接迁移后造成地形技能遗忘。full 阶段四条线训练
+seed342--345，标准长度 6400 step、每 400 保存；权威点为 seed345/agent5200。该点归档为：
+
+`artifacts/checkpoints/course_torch/peer_xy_full_seed345_agent5200.pt`
+
+SHA-256：
+
+`b6f667f194b50905dd5451b128838ee56b3ad1acf20460f74f4881928c460646`
+
+所有结果均使用 `num_envs=1`，从正式起点采样完整回合。四个评估 seed 为
+2026、2058、2090、2122；同学 checkpoint 从未进入这些评估。
+
+| 难度 | 环境 | 回合 | 上平台 | 摔倒 | 结论 |
+| --- | --- | ---: | ---: | ---: | --- |
+| fixed | fixed full | 8 | 8/8 | 0/8 | 固定条件回归通过 |
+| random XY | `vbot-section01-peer-xy-full-course` | 64 | 17/64 | 47/64 | 四个 seed 均有平台事件 |
+| random XY + yaw | `vbot-section01-full-random-xy-yaw-course` | 64 | 18/64 | 46/64 | `+-0.15 rad` 零样本通过 |
+| random XY + yaw + stable-50 | `vbot-section01-peer-xy-yaw-stable-v4-50-course` | 128 | 28/128 | 100/128 | 3/128 稳定成功，来自三个 seed |
+
+50 步正式验收逐 seed 结果：
+
+| eval seed | 上平台 | stable-50 | fall | timeout | mean max Y | max Y | max stable steps |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 2026 | 7/32 | 1/32 | 25/32 | 6/32 | 2.308 | 7.343 | 50 |
+| 2058 | 6/32 | 0/32 | 26/32 | 6/32 | 2.137 | 7.250 | 19 |
+| 2090 | 5/32 | 1/32 | 27/32 | 4/32 | 1.796 | 7.324 | 50 |
+| 2122 | 10/32 | 1/32 | 22/32 | 9/32 | 2.664 | 7.355 | 50 |
+| 合计 | 28/128 | 3/128 | 100/128 | 25/128 | 2.226 | 7.355 | 50 |
+
+聚合 waypoint crossings 为：
+
+`{-1.75: 128, 1.0: 78, 1.55: 66, 1.75: 59, 2.15: 28, 6.8: 28, 7.8: 0}`
+
+waypoint episode histogram 为：
+
+`[0, 50, 12, 7, 31, 0, 28, 0]`
+
+原始 JSON 分别保存在：
+
+- `artifacts/evaluations/course_torch/peer_xy_authority_formal/`
+- `artifacts/evaluations/course_torch/peer_xy_yaw_authority_formal/`
+- `artifacts/evaluations/course_torch/peer_xy_stable_v4_50_formal_final/`
+- 更严格的 100 步对照保存在 `artifacts/evaluations/course_torch/peer_xy_stable_v4_formal_final/`，结果为 `2/128`，来自 seed2026 和 seed2122。
+
+最终录制文件为：
+
+`artifacts/videos/section1_peer_xy_yaw_stable_v4_seed2026_episode8_final.webm`
+
+视频为 VP8、1280x720、30 fps、110 秒。播放日志确认该回合
+`episode_success=True`、`ever_on_platform=True`、`stable_success=True`、
+`max_stable_steps=100`、`final_y=7.324539`。因此视频展示的成功强于最终 50 步验收门槛。

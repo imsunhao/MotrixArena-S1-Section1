@@ -13,6 +13,6 @@
 # limitations under the License.
 # ==============================================================================
 
-from . import cfg, vbot_section011_np  # noqa: F401
+from . import cfg, section01_course, vbot_section011_np  # noqa: F401
 from .cfg import VBotSection011EnvCfg  # noqa: F401
 from .vbot_section011_np import VBotSection011Env  # noqa: F401
